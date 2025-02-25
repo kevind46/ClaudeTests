@@ -20,7 +20,7 @@
     </style>
 </head>
 <body>
-    <div id="info">3D City Scene - Click and drag to look around | WASD to move | Q/E to cycle time</div>
+    <div id="info">3D City Scene - Click and drag to look around | WASD to move | SPACE/SHIFT for up/down | Q/E to cycle time</div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
         // Initialize Three.js scene
@@ -47,10 +47,10 @@
         scene.add(sunLight);
 
         // City parameters
-        const citySize = 100;
-        const buildingCount = 50;
-        const roadWidth = 10;
-        const blockSize = 30;
+        const citySize = 60; // Reduced from 100
+        const buildingCount = 30; // Reduced from 50
+        const roadWidth = 8; // Slightly narrower roads
+        const blockSize = 25; // Slightly smaller blocks
 
         // Create ground
         const groundGeometry = new THREE.PlaneGeometry(citySize * 2, citySize * 2);
@@ -654,7 +654,7 @@
         // Cars
         const cars = [];
         function createCars() {
-            const carCount = 30;
+            const carCount = 15; // Reduced from 30
             
             for (let i = 0; i < carCount; i++) {
                 // Determine road position
@@ -818,7 +818,7 @@
         // Create pedestrians
         const pedestrians = [];
         function createPedestrians() {
-            const pedestrianCount = 20;
+            const pedestrianCount = 10; // Reduced from 20
             
             for (let i = 0; i < pedestrianCount; i++) {
                 // Choose either sidewalk or crossing
@@ -962,6 +962,7 @@
         // Camera controls
         const keys = {};
         const moveSpeed = 0.5;
+        const verticalSpeed = 0.4; // Speed for up/down movement
         const rotateSpeed = 0.02;
         
         function setupCameraControls() {
@@ -1048,8 +1049,8 @@
         }
         
         // Time system
-        let timeOfDay = 0; // 0-24 hours
-        const timeSpeed = 0.01; // Time passing speed
+        let timeOfDay = 12; // Start at noon
+        const timeSpeed = 0.002; // Much slower (was 0.01)
         
         // Update camera position based on keyboard input
         function updateCamera() {
@@ -1072,6 +1073,14 @@
             }
             if (keys['d']) {
                 camera.position.addScaledVector(sideDirection, -moveSpeed);
+            }
+            
+            // Space/Shift for up/down movement
+            if (keys[' '] || keys['space']) {
+                camera.position.y += verticalSpeed;
+            }
+            if (keys['shift']) {
+                camera.position.y -= verticalSpeed;
             }
             
             // Q/E for time control
