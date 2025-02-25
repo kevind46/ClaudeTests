@@ -1,1397 +1,1271 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8">
     <title>3D City Scene</title>
     <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-        }
-        canvas {
-            display: block;
-        }
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
         #info {
             position: absolute;
             top: 10px;
-            left: 10px;
+            width: 100%;
+            text-align: center;
             color: white;
             font-family: Arial, sans-serif;
-            background-color: rgba(0, 0, 0, 0.5);
-            padding: 10px;
-            border-radius: 5px;
-        }
-        #time-control {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: white;
-            font-family: Arial, sans-serif;
-            background-color: rgba(0, 0, 0, 0.5);
-            padding: 10px;
-            border-radius: 5px;
-            display: flex;
-            align-items: center;
-        }
-        #time-slider {
-            width: 200px;
-            margin: 0 10px;
+            text-shadow: 1px 1px 2px black;
+            z-index: 100;
+            pointer-events: none;
         }
     </style>
 </head>
 <body>
-    <div id="info">
-        <h3>3D City Scene</h3>
-        <p>Controls: WASD to move, mouse to look around</p>
-        <p>Click and drag to rotate the camera</p>
-        <p>Scroll to zoom in/out</p>
-    </div>
-    
-    <div id="time-control">
-        <span>Time of Day:</span>
-        <input type="range" id="time-slider" min="0" max="24" value="12" step="0.1">
-        <span id="time-display">12:00</span>
-    </div>
-
+    <div id="info">3D City Scene - Click and drag to look around | WASD to move | Q/E to cycle time</div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
     <script>
-        // Initialize the scene
+        // Initialize Three.js scene
         const scene = new THREE.Scene();
-        
-        // Create camera
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 15, 50);
-        
-        // Create renderer
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         document.body.appendChild(renderer.domElement);
-        
-        // Handle window resize
-        window.addEventListener('resize', () => {
-            const width = window.innerWidth;
-            const height = window.innerHeight;
-            renderer.setSize(width, height);
-            camera.aspect = width / height;
-            camera.updateProjectionMatrix();
-        });
-        
-        // -------- CITY LAYOUT --------
-        const citySize = 200;
-        const blockSize = 20;
+
+        // Setup camera
+        camera.position.set(0, 30, 50);
+        camera.lookAt(0, 0, 0);
+
+        // Add lights
+        const ambientLight = new THREE.AmbientLight(0x404040);
+        scene.add(ambientLight);
+
+        const sunLight = new THREE.DirectionalLight(0xffffff, 1);
+        sunLight.position.set(50, 100, 50);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 1024;
+        sunLight.shadow.mapSize.height = 1024;
+        scene.add(sunLight);
+
+        // City parameters
+        const citySize = 100;
+        const buildingCount = 50;
         const roadWidth = 10;
-        
-        // Ground
+        const blockSize = 30;
+
+        // Create ground
         const groundGeometry = new THREE.PlaneGeometry(citySize * 2, citySize * 2);
-        const groundMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0x222222, 
-            roughness: 0.8 
-        });
+        const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x1a3300, roughness: 0.8 });
         const ground = new THREE.Mesh(groundGeometry, groundMaterial);
         ground.rotation.x = -Math.PI / 2;
         ground.receiveShadow = true;
         scene.add(ground);
-        
-        // -------- BUILDINGS --------
-        const buildingTypes = {
-            SKYSCRAPER: 'skyscraper',
-            APARTMENT: 'apartment',
-            SHOP: 'shop'
-        };
-        
-        function createBuilding(type, x, z, width, depth) {
-            const buildingGroup = new THREE.Group();
-            let height;
-            let color;
-            let windows = true;
+
+        // Create roads
+        function createRoads() {
+            const roadMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
             
-            switch(type) {
-                case buildingTypes.SKYSCRAPER:
-                    height = 40 + Math.random() * 60;
-                    color = 0x444444 + Math.random() * 0x222222;
-                    break;
-                case buildingTypes.APARTMENT:
-                    height = 15 + Math.random() * 15;
-                    color = 0x885544 + Math.random() * 0x332211;
-                    break;
-                case buildingTypes.SHOP:
-                    height = 5 + Math.random() * 5;
-                    color = 0x778899 + Math.random() * 0x223344;
-                    break;
+            // Main roads
+            for (let i = -citySize; i <= citySize; i += blockSize + roadWidth) {
+                // Horizontal roads
+                const hRoadGeometry = new THREE.PlaneGeometry(citySize * 2, roadWidth);
+                const hRoad = new THREE.Mesh(hRoadGeometry, roadMaterial);
+                hRoad.rotation.x = -Math.PI / 2;
+                hRoad.position.set(0, 0.01, i);
+                hRoad.receiveShadow = true;
+                scene.add(hRoad);
+                
+                // Vertical roads
+                const vRoadGeometry = new THREE.PlaneGeometry(roadWidth, citySize * 2);
+                const vRoad = new THREE.Mesh(vRoadGeometry, roadMaterial);
+                vRoad.rotation.x = -Math.PI / 2;
+                vRoad.position.set(i, 0.01, 0);
+                vRoad.receiveShadow = true;
+                scene.add(vRoad);
+                
+                // Create road markings
+                createRoadMarkings(i, 0, true); // Horizontal
+                createRoadMarkings(0, i, false); // Vertical
             }
+        }
+
+        // Road markings
+        function createRoadMarkings(x, z, isHorizontal) {
+            const markerMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFFFF });
             
-            // Building main structure
-            const buildingGeometry = new THREE.BoxGeometry(width, height, depth);
+            if (isHorizontal) {
+                for (let i = -citySize + 5; i < citySize; i += 10) {
+                    const markerGeometry = new THREE.PlaneGeometry(3, 0.5);
+                    const marker = new THREE.Mesh(markerGeometry, markerMaterial);
+                    marker.rotation.x = -Math.PI / 2;
+                    marker.position.set(i, 0.02, z);
+                    marker.receiveShadow = true;
+                    scene.add(marker);
+                }
+            } else {
+                for (let i = -citySize + 5; i < citySize; i += 10) {
+                    const markerGeometry = new THREE.PlaneGeometry(0.5, 3);
+                    const marker = new THREE.Mesh(markerGeometry, markerMaterial);
+                    marker.rotation.x = -Math.PI / 2;
+                    marker.position.set(x, 0.02, i);
+                    marker.receiveShadow = true;
+                    scene.add(marker);
+                }
+            }
+        }
+
+        // Create buildings
+        function createBuildings() {
+            for (let x = -citySize; x < citySize; x += blockSize + roadWidth) {
+                for (let z = -citySize; z < citySize; z += blockSize + roadWidth) {
+                    // Skip some blocks randomly to create variation
+                    if (Math.random() < 0.2) continue;
+                    
+                    const blockType = Math.random();
+                    
+                    if (blockType < 0.6) {
+                        // Regular building block
+                        createBuildingBlock(x, z);
+                    } else if (blockType < 0.8) {
+                        // Park
+                        createPark(x, z);
+                    } else {
+                        // Skyscraper area
+                        createSkyscraper(x, z);
+                    }
+                }
+            }
+        }
+
+        // Create a block of buildings
+        function createBuildingBlock(blockX, blockZ) {
+            const buildingsPerBlock = 4;
+            const buildingSize = (blockSize - (buildingsPerBlock - 1) * 2) / buildingsPerBlock;
+            
+            for (let i = 0; i < buildingsPerBlock; i++) {
+                for (let j = 0; j < buildingsPerBlock; j++) {
+                    // Skip some buildings randomly
+                    if (Math.random() < 0.3) continue;
+                    
+                    const x = blockX - blockSize/2 + i * (buildingSize + 2) + buildingSize/2;
+                    const z = blockZ - blockSize/2 + j * (buildingSize + 2) + buildingSize/2;
+                    
+                    createBuilding(x, z, buildingSize);
+                }
+            }
+        }
+
+        // Create a single building
+        function createBuilding(x, z, size) {
+            const height = 5 + Math.random() * 15;
+            const color = new THREE.Color(0.5 + Math.random() * 0.5, 0.5 + Math.random() * 0.5, 0.5 + Math.random() * 0.5);
+            
+            // Main building
+            const buildingGeometry = new THREE.BoxGeometry(size, height, size);
             const buildingMaterial = new THREE.MeshStandardMaterial({ 
                 color: color,
-                roughness: 0.7,
-                metalness: 0.2
+                roughness: 0.7
             });
             const building = new THREE.Mesh(buildingGeometry, buildingMaterial);
-            building.position.y = height / 2;
-            building.position.x = x;
-            building.position.z = z;
+            building.position.set(x, height/2, z);
             building.castShadow = true;
             building.receiveShadow = true;
-            buildingGroup.add(building);
+            scene.add(building);
             
-            // Add windows
-            if (windows) {
-                const windowSpacing = 2;
-                const windowSize = 1;
-                const windowDepth = 0.1;
-                
-                for (let i = 1; i < height - 2; i += windowSpacing) {
-                    for (let j = -width/2 + 2; j < width/2 - 1; j += windowSpacing) {
-                        // Front windows
-                        addWindow(j, i, depth/2 + windowDepth/2, buildingGroup, windowSize);
-                        
-                        // Back windows
-                        addWindow(j, i, -depth/2 - windowDepth/2, buildingGroup, windowSize);
-                        
-                        // Side windows (fewer)
-                        if (Math.random() > 0.7) {
-                            // Right side
-                            addWindow(width/2 + windowDepth/2, i, j, buildingGroup, windowSize);
-                            
-                            // Left side
-                            addWindow(-width/2 - windowDepth/2, i, j, buildingGroup, windowSize);
-                        }
-                    }
-                }
+            // Windows
+            addWindows(building, size, height);
+            
+            // Roof elements (sometimes)
+            if (Math.random() > 0.5) {
+                addRoofElements(x, height, z, size);
             }
-            
-            // Rooftop details for skyscrapers and apartments
-            if (type !== buildingTypes.SHOP) {
-                const roofStructureGeometry = new THREE.BoxGeometry(width * 0.5, 2, depth * 0.5);
-                const roofStructureMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
-                const roofStructure = new THREE.Mesh(roofStructureGeometry, roofStructureMaterial);
-                roofStructure.position.y = height + 1;
-                roofStructure.castShadow = true;
-                buildingGroup.add(roofStructure);
-                
-                if (type === buildingTypes.SKYSCRAPER && Math.random() > 0.5) {
-                    // Antenna for skyscrapers
-                    const antennaGeometry = new THREE.CylinderGeometry(0.2, 0.2, 10, 8);
-                    const antennaMaterial = new THREE.MeshStandardMaterial({ color: 0x111111 });
-                    const antenna = new THREE.Mesh(antennaGeometry, antennaMaterial);
-                    antenna.position.y = height + 6;
-                    buildingGroup.add(antenna);
-                }
-            }
-            
-            return buildingGroup;
         }
-        
-        function addWindow(x, y, z, buildingGroup, size) {
-            const windowGeometry = new THREE.PlaneGeometry(size, size);
+
+        // Add windows to a building
+        function addWindows(building, size, height) {
+            const windowSize = 0.8;
+            const windowSpacing = 1.5;
+            const windowsPerSide = Math.floor(size / windowSpacing);
+            const floorsCount = Math.floor(height / windowSpacing);
+            
+            const windowGeometry = new THREE.PlaneGeometry(windowSize, windowSize);
             const windowMaterial = new THREE.MeshStandardMaterial({ 
-                color: 0xffffaa,
+                color: 0xFFFFFF,
+                emissive: new THREE.Color(0.1, 0.1, 0.1),
                 transparent: true,
-                opacity: 0.8,
-                emissive: 0xffffaa,
-                emissiveIntensity: 0.5
+                opacity: 0.7
             });
-            const windowMesh = new THREE.Mesh(windowGeometry, windowMaterial);
-            windowMesh.position.set(x, y, z);
             
-            // Rotate the window depending on its position
-            if (Math.abs(z) > Math.abs(x)) {
-                windowMesh.rotation.y = (z > 0) ? 0 : Math.PI;
-            } else {
-                windowMesh.rotation.y = (x > 0) ? Math.PI / 2 : -Math.PI / 2;
+            // Windows on front and back
+            for (let floor = 0; floor < floorsCount; floor++) {
+                for (let w = 0; w < windowsPerSide; w++) {
+                    // Skip some windows randomly
+                    if (Math.random() < 0.2) continue;
+                    
+                    const wx = -size/2 + w * windowSpacing + windowSpacing/2;
+                    const wy = floor * windowSpacing + windowSpacing;
+                    
+                    // Front windows
+                    const frontWindow = new THREE.Mesh(windowGeometry, windowMaterial);
+                    frontWindow.position.set(wx, wy, size/2 + 0.01);
+                    building.add(frontWindow);
+                    
+                    // Back windows
+                    const backWindow = new THREE.Mesh(windowGeometry, windowMaterial);
+                    backWindow.position.set(wx, wy, -size/2 - 0.01);
+                    backWindow.rotation.y = Math.PI;
+                    building.add(backWindow);
+                }
             }
             
-            buildingGroup.add(windowMesh);
+            // Windows on sides
+            for (let floor = 0; floor < floorsCount; floor++) {
+                for (let w = 0; w < windowsPerSide; w++) {
+                    // Skip some windows randomly
+                    if (Math.random() < 0.2) continue;
+                    
+                    const wz = -size/2 + w * windowSpacing + windowSpacing/2;
+                    const wy = floor * windowSpacing + windowSpacing;
+                    
+                    // Left windows
+                    const leftWindow = new THREE.Mesh(windowGeometry, windowMaterial);
+                    leftWindow.position.set(-size/2 - 0.01, wy, wz);
+                    leftWindow.rotation.y = -Math.PI / 2;
+                    building.add(leftWindow);
+                    
+                    // Right windows
+                    const rightWindow = new THREE.Mesh(windowGeometry, windowMaterial);
+                    rightWindow.position.set(size/2 + 0.01, wy, wz);
+                    rightWindow.rotation.y = Math.PI / 2;
+                    building.add(rightWindow);
+                }
+            }
         }
-        
-        // -------- GENERATE CITY BLOCKS --------
-        function generateCity() {
-            const cityBlocks = new THREE.Group();
-            
-            for (let x = -citySize/2; x < citySize/2; x += blockSize + roadWidth) {
-                for (let z = -citySize/2; z < citySize/2; z += blockSize + roadWidth) {
-                    // Determine block type based on distance from center
-                    const distFromCenter = Math.sqrt(x*x + z*z);
-                    let blockType;
-                    
-                    if (distFromCenter < citySize/5) {
-                        // Downtown - skyscrapers
-                        blockType = buildingTypes.SKYSCRAPER;
-                    } else if (distFromCenter < citySize/2) {
-                        // Mid city - mix of apartments and some shops
-                        blockType = Math.random() > 0.2 ? buildingTypes.APARTMENT : buildingTypes.SHOP;
-                    } else {
-                        // Outer city - mostly shops and some apartments
-                        blockType = Math.random() > 0.7 ? buildingTypes.APARTMENT : buildingTypes.SHOP;
-                    }
-                    
-                    // Create a block of buildings
-                    const blockWidth = blockSize;
-                    const blockDepth = blockSize;
-                    
-                    if (blockType === buildingTypes.SKYSCRAPER) {
-                        // Few large buildings
-                        const buildingWidth = blockWidth * (0.3 + Math.random() * 0.3);
-                        const buildingDepth = blockDepth * (0.3 + Math.random() * 0.3);
-                        
-                        for (let i = 0; i < 1 + Math.random() * 2; i++) {
-                            const offsetX = (Math.random() - 0.5) * (blockWidth - buildingWidth);
-                            const offsetZ = (Math.random() - 0.5) * (blockDepth - buildingDepth);
-                            const building = createBuilding(blockType, x + offsetX, z + offsetZ, buildingWidth, buildingDepth);
-                            cityBlocks.add(building);
-                        }
-                    } else if (blockType === buildingTypes.APARTMENT) {
-                        // Medium buildings along the perimeter
-                        const buildingWidth = 6 + Math.random() * 4;
-                        const buildingDepth = 6 + Math.random() * 4;
-                        const gap = 1;
-                        
-                        // Place buildings around the perimeter
-                        for (let bx = -blockWidth/2 + buildingWidth/2; bx < blockWidth/2; bx += buildingWidth + gap) {
-                            // North and South sides
-                            cityBlocks.add(createBuilding(blockType, x + bx, z - blockDepth/2 + buildingDepth/2, buildingWidth, buildingDepth));
-                            cityBlocks.add(createBuilding(blockType, x + bx, z + blockDepth/2 - buildingDepth/2, buildingWidth, buildingDepth));
-                        }
-                        
-                        for (let bz = -blockDepth/2 + buildingDepth/2; bz < blockDepth/2; bz += buildingDepth + gap) {
-                            // East and West sides
-                            cityBlocks.add(createBuilding(blockType, x - blockWidth/2 + buildingWidth/2, z + bz, buildingWidth, buildingDepth));
-                            cityBlocks.add(createBuilding(blockType, x + blockWidth/2 - buildingWidth/2, z + bz, buildingWidth, buildingDepth));
-                        }
-                    } else {
-                        // Small shops in a more varied pattern
-                        const buildingWidth = 3 + Math.random() * 2;
-                        const buildingDepth = 3 + Math.random() * 2;
-                        
-                        for (let i = 0; i < 3 + Math.random() * 5; i++) {
-                            const offsetX = (Math.random() - 0.5) * (blockWidth - buildingWidth);
-                            const offsetZ = (Math.random() - 0.5) * (blockDepth - buildingDepth);
-                            const building = createBuilding(blockType, x + offsetX, z + offsetZ, buildingWidth, buildingDepth);
-                            cityBlocks.add(building);
-                        }
-                    }
-                    
-                    // Add street elements like trees, benches, lampposts
-                    addStreetElements(x, z, blockSize, cityBlocks);
-                }
-            }
-            
-            scene.add(cityBlocks);
-        }
-        
-        // -------- STREET ELEMENTS --------
-        function addStreetElements(blockX, blockZ, blockSize, cityBlocks) {
-            // Add trees along sidewalks
-            const treePositions = [
-                { x: blockX - blockSize/2 - 3, z: blockZ - blockSize/2 - 3 }, // Corner
-                { x: blockX + blockSize/2 + 3, z: blockZ - blockSize/2 - 3 }, // Corner
-                { x: blockX - blockSize/2 - 3, z: blockZ + blockSize/2 + 3 }, // Corner
-                { x: blockX + blockSize/2 + 3, z: blockZ + blockSize/2 + 3 }  // Corner
-            ];
-            
-            // Add some random trees along the streets
-            for (let i = -blockSize/2; i <= blockSize/2; i += 10) {
-                if (Math.random() > 0.5) {
-                    treePositions.push({ x: blockX + i, z: blockZ - blockSize/2 - 3 });
-                    treePositions.push({ x: blockX + i, z: blockZ + blockSize/2 + 3 });
-                }
-                if (Math.random() > 0.5) {
-                    treePositions.push({ x: blockX - blockSize/2 - 3, z: blockZ + i });
-                    treePositions.push({ x: blockX + blockSize/2 + 3, z: blockZ + i });
-                }
-            }
-            
-            // Create trees
-            treePositions.forEach(pos => {
-                // Only place if not on road intersection
-                if (!isIntersection(pos.x, pos.z)) {
-                    const tree = createTree();
-                    tree.position.set(pos.x, 0, pos.z);
-                    cityBlocks.add(tree);
-                }
-            });
-            
-            // Add lampposts at some corners and along streets
-            const lampPositions = [
-                { x: blockX - blockSize/2 - 4, z: blockZ - blockSize/2 - 4 }, // Corner
-                { x: blockX + blockSize/2 + 4, z: blockZ - blockSize/2 - 4 }, // Corner
-                { x: blockX - blockSize/2 - 4, z: blockZ + blockSize/2 + 4 }, // Corner
-                { x: blockX + blockSize/2 + 4, z: blockZ + blockSize/2 + 4 }  // Corner
-            ];
-            
-            // Create lampposts
-            lampPositions.forEach(pos => {
-                if (!isIntersection(pos.x, pos.z) && Math.random() > 0.3) {
-                    const lamppost = createLamppost();
-                    lamppost.position.set(pos.x, 0, pos.z);
-                    cityBlocks.add(lamppost);
-                }
-            });
-            
-            // Add benches along sidewalks
+
+        // Add elements to building roofs
+        function addRoofElements(x, buildingHeight, z, buildingSize) {
+            // Water tower
             if (Math.random() > 0.7) {
-                const benchPos = {
-                    x: blockX + (Math.random() - 0.5) * blockSize,
-                    z: blockZ - blockSize/2 - 3
-                };
+                const towerGeometry = new THREE.CylinderGeometry(buildingSize/6, buildingSize/6, buildingSize/3, 8);
+                const towerMaterial = new THREE.MeshStandardMaterial({ color: 0x888888 });
+                const tower = new THREE.Mesh(towerGeometry, towerMaterial);
+                tower.position.set(x, buildingHeight + buildingSize/6, z);
+                tower.castShadow = true;
+                scene.add(tower);
                 
-                if (!isIntersection(benchPos.x, benchPos.z)) {
-                    const bench = createBench();
-                    bench.position.set(benchPos.x, 0, benchPos.z);
-                    bench.rotation.y = Math.PI / 2;
-                    cityBlocks.add(bench);
-                }
-            }
-        }
-        
-        function isIntersection(x, z) {
-            // Check if the position is at a road intersection
-            const blockSize = 20;
-            const roadWidth = 10;
-            const tolerance = 8;
-            
-            const modX = Math.abs(x) % (blockSize + roadWidth);
-            const modZ = Math.abs(z) % (blockSize + roadWidth);
-            
-            return (modX > blockSize - tolerance || modX < tolerance) && 
-                   (modZ > blockSize - tolerance || modZ < tolerance);
-        }
-        
-        function createTree() {
-            const treeGroup = new THREE.Group();
-            
-            // Tree trunk
-            const trunkGeometry = new THREE.CylinderGeometry(0.2, 0.4, 2, 8);
-            const trunkMaterial = new THREE.MeshStandardMaterial({ 
-                color: 0x8B4513,
-                roughness: 0.9
-            });
-            const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-            trunk.position.y = 1;
-            trunk.castShadow = true;
-            treeGroup.add(trunk);
-            
-            // Tree foliage
-            const foliageGeometry = new THREE.ConeGeometry(1.5, 3, 8);
-            const foliageMaterial = new THREE.MeshStandardMaterial({ 
-                color: 0x2E8B57,
-                roughness: 0.8
-            });
-            
-            const foliage1 = new THREE.Mesh(foliageGeometry, foliageMaterial);
-            foliage1.position.y = 3;
-            foliage1.castShadow = true;
-            treeGroup.add(foliage1);
-            
-            const foliage2 = new THREE.Mesh(foliageGeometry, foliageMaterial);
-            foliage2.position.y = 4;
-            foliage2.scale.set(0.8, 0.8, 0.8);
-            foliage2.castShadow = true;
-            treeGroup.add(foliage2);
-            
-            return treeGroup;
-        }
-        
-        function createLamppost() {
-            const lampGroup = new THREE.Group();
-            
-            // Lamp post
-            const postGeometry = new THREE.CylinderGeometry(0.2, 0.2, 6, 8);
-            const postMaterial = new THREE.MeshStandardMaterial({ 
-                color: 0x333333,
-                roughness: 0.7
-            });
-            const post = new THREE.Mesh(postGeometry, postMaterial);
-            post.position.y = 3;
-            post.castShadow = true;
-            lampGroup.add(post);
-            
-            // Lamp head
-            const headGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.4, 8);
-            const headMaterial = new THREE.MeshStandardMaterial({ 
-                color: 0x555555,
-                roughness: 0.5
-            });
-            const head = new THREE.Mesh(headGeometry, headMaterial);
-            head.position.y = 6;
-            head.rotation.x = Math.PI / 2;
-            lampGroup.add(head);
-            
-            // Lamp light
-            const lightGeometry = new THREE.SphereGeometry(0.3, 16, 16);
-            const lightMaterial = new THREE.MeshStandardMaterial({ 
-                color: 0xFFFFCC,
-                emissive: 0xFFFFCC,
-                emissiveIntensity: 1,
-                transparent: true,
-                opacity: 0.9
-            });
-            const light = new THREE.Mesh(lightGeometry, lightMaterial);
-            light.position.y = 6;
-            light.userData.isLampLight = true;
-            lampGroup.add(light);
-            
-            // Add actual light source
-            const pointLight = new THREE.PointLight(0xFFFFCC, 0.7, 10);
-            pointLight.position.y = 6;
-            pointLight.castShadow = true;
-            pointLight.shadow.mapSize.width = 512;
-            pointLight.shadow.mapSize.height = 512;
-            pointLight.userData.isLampLightSource = true;
-            lampGroup.add(pointLight);
-            
-            return lampGroup;
-        }
-        
-        function createBench() {
-            const benchGroup = new THREE.Group();
-            
-            // Bench seat
-            const seatGeometry = new THREE.BoxGeometry(3, 0.2, 0.8);
-            const seatMaterial = new THREE.MeshStandardMaterial({ 
-                color: 0x8B4513,
-                roughness: 0.9
-            });
-            const seat = new THREE.Mesh(seatGeometry, seatMaterial);
-            seat.position.y = 0.6;
-            seat.castShadow = true;
-            benchGroup.add(seat);
-            
-            // Bench legs
-            const legGeometry = new THREE.BoxGeometry(0.2, 0.6, 0.8);
-            const legMaterial = new THREE.MeshStandardMaterial({ 
-                color: 0x333333,
-                roughness: 0.7
-            });
-            
-            const leg1 = new THREE.Mesh(legGeometry, legMaterial);
-            leg1.position.set(-1.2, 0.3, 0);
-            leg1.castShadow = true;
-            benchGroup.add(leg1);
-            
-            const leg2 = new THREE.Mesh(legGeometry, legMaterial);
-            leg2.position.set(1.2, 0.3, 0);
-            leg2.castShadow = true;
-            benchGroup.add(leg2);
-            
-            // Bench backrest
-            const backrestGeometry = new THREE.BoxGeometry(3, 0.8, 0.2);
-            const backrest = new THREE.Mesh(backrestGeometry, seatMaterial);
-            backrest.position.set(0, 1.2, -0.3);
-            backrest.castShadow = true;
-            benchGroup.add(backrest);
-            
-            return benchGroup;
-        }
-        
-        // -------- ROADS & TRAFFIC --------
-        function createRoads() {
-            const roadGroup = new THREE.Group();
-            
-            // Create crosswalks at intersections
-            for (let x = -citySize/2; x < citySize/2; x += blockSize + roadWidth) {
-                for (let z = -citySize/2; z < citySize/2; z += blockSize + roadWidth) {
-                    // Create traffic lights
-                    createTrafficLights(x, z, roadGroup);
+                // Supports for water tower
+                const supportGeometry = new THREE.CylinderGeometry(0.2, 0.2, buildingSize/6, 4);
+                const supportMaterial = new THREE.MeshStandardMaterial({ color: 0x444444 });
+                
+                for (let i = 0; i < 4; i++) {
+                    const angle = i * Math.PI / 2;
+                    const supportX = x + Math.cos(angle) * buildingSize/4;
+                    const supportZ = z + Math.sin(angle) * buildingSize/4;
                     
-                    // Create crosswalks
-                    createCrosswalk(x, z, roadWidth, 'x', roadGroup);
-                    createCrosswalk(x, z, roadWidth, 'z', roadGroup);
+                    const support = new THREE.Mesh(supportGeometry, supportMaterial);
+                    support.position.set(supportX, buildingHeight + buildingSize/12, supportZ);
+                    support.castShadow = true;
+                    scene.add(support);
                 }
             }
             
-            // Add road markings (lane dividers)
-            for (let x = -citySize/2; x < citySize/2; x += blockSize + roadWidth) {
-                for (let z = -citySize/2 + (blockSize + roadWidth)/2; z < citySize/2; z += blockSize + roadWidth) {
-                    createRoadMarking(x, z, 'x', roadGroup);
-                }
-            }
-            
-            for (let z = -citySize/2; z < citySize/2; z += blockSize + roadWidth) {
-                for (let x = -citySize/2 + (blockSize + roadWidth)/2; x < citySize/2; x += blockSize + roadWidth) {
-                    createRoadMarking(x, z, 'z', roadGroup);
-                }
-            }
-            
-            scene.add(roadGroup);
-        }
-        
-        function createCrosswalk(x, z, width, direction, roadGroup) {
-            const stripeWidth = 0.5;
-            const stripeLength = 3;
-            const stripeSpacing = 0.5;
-            const numStripes = 5;
-            
-            const stripeGeometry = new THREE.BoxGeometry(
-                direction === 'x' ? stripeWidth : stripeLength,
-                0.05,
-                direction === 'x' ? stripeLength : stripeWidth
-            );
-            const stripeMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFFFF });
-            
-            const crosswalkGroup = new THREE.Group();
-            
-            for (let i = 0; i < numStripes; i++) {
-                const offset = (i - numStripes / 2) * (stripeWidth + stripeSpacing);
+            // AC Units
+            else if (Math.random() > 0.5) {
+                const acCount = Math.floor(Math.random() * 3) + 1;
                 
-                const stripe = new THREE.Mesh(stripeGeometry, stripeMaterial);
-                stripe.position.y = 0.025;
-                
-                if (direction === 'x') {
-                    stripe.position.x = x + offset;
-                    stripe.position.z = z - width / 2;
-                } else {
-                    stripe.position.x = x - width / 2;
-                    stripe.position.z = z + offset;
-                }
-                
-                crosswalkGroup.add(stripe);
-                
-                // Create second set of stripes on the other side of the intersection
-                const stripe2 = new THREE.Mesh(stripeGeometry, stripeMaterial);
-                stripe2.position.y = 0.025;
-                
-                if (direction === 'x') {
-                    stripe2.position.x = x + offset;
-                    stripe2.position.z = z + width / 2;
-                } else {
-                    stripe2.position.x = x + width / 2;
-                    stripe2.position.z = z + offset;
-                }
-                
-                crosswalkGroup.add(stripe2);
-            }
-            
-            roadGroup.add(crosswalkGroup);
-        }
-        
-        function createRoadMarking(x, z, direction, roadGroup) {
-            const markingLength = blockSize;
-            const markingWidth = 0.2;
-            
-            const markingGeometry = new THREE.BoxGeometry(
-                direction === 'x' ? markingLength : markingWidth,
-                0.05,
-                direction === 'x' ? markingWidth : markingLength
-            );
-            const markingMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFFFF });
-            
-            const marking = new THREE.Mesh(markingGeometry, markingMaterial);
-            marking.position.y = 0.025;
-            marking.position.x = direction === 'x' ? x : z;
-            marking.position.z = direction === 'x' ? z : x;
-            
-            roadGroup.add(marking);
-        }
-        
-        function createTrafficLights(x, z, roadGroup) {
-            const positions = [
-                { x: x - roadWidth/2 - 1, z: z - roadWidth/2 - 1, rotation: Math.PI / 4 },
-                { x: x + roadWidth/2 + 1, z: z - roadWidth/2 - 1, rotation: Math.PI * 3/4 },
-                { x: x - roadWidth/2 - 1, z: z + roadWidth/2 + 1, rotation: -Math.PI / 4 },
-                { x: x + roadWidth/2 + 1, z: z + roadWidth/2 + 1, rotation: -Math.PI * 3/4 }
-            ];
-            
-            positions.forEach(pos => {
-                const trafficLight = createTrafficLight();
-                trafficLight.position.set(pos.x, 0, pos.z);
-                trafficLight.rotation.y = pos.rotation;
-                roadGroup.add(trafficLight);
-            });
-        }
-        
-        function createTrafficLight() {
-            const trafficLightGroup = new THREE.Group();
-            
-            // Post
-            const postGeometry = new THREE.CylinderGeometry(0.1, 0.1, 3, 8);
-            const postMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
-            const post = new THREE.Mesh(postGeometry, postMaterial);
-            post.position.y = 1.5;
-            trafficLightGroup.add(post);
-            
-            // Light housing
-            const housingGeometry = new THREE.BoxGeometry(0.5, 1.2, 0.3);
-            const housingMaterial = new THREE.MeshStandardMaterial({ color: 0x111111 });
-            const housing = new THREE.Mesh(housingGeometry, housingMaterial);
-            housing.position.y = 3;
-            trafficLightGroup.add(housing);
-            
-            // Lights
-            const lightGeometry = new THREE.CircleGeometry(0.1, 16);
-            const redLight = new THREE.Mesh(
-                lightGeometry,
-                new THREE.MeshStandardMaterial({ 
-                    color: 0xFF0000,
-                    emissive: 0xFF0000,
-                    emissiveIntensity: 0.5
-                })
-            );
-            redLight.position.set(0, 3.4, 0.16);
-            redLight.rotation.y = Math.PI;
-            trafficLightGroup.add(redLight);
-            
-            const yellowLight = new THREE.Mesh(
-                lightGeometry,
-                new THREE.MeshStandardMaterial({ 
-                    color: 0xFFFF00,
-                    emissive: 0xFFFF00,
-                    emissiveIntensity: 0.5
-                })
-            );
-            yellowLight.position.set(0, 3, 0.16);
-            yellowLight.rotation.y = Math.PI;
-            trafficLightGroup.add(yellowLight);
-            
-            const greenLight = new THREE.Mesh(
-                lightGeometry,
-                new THREE.MeshStandardMaterial({ 
-                    color: 0x00FF00,
-                    emissive: 0x00FF00,
-                    emissiveIntensity: 0.5
-                })
-            );
-            greenLight.position.set(0, 2.6, 0.16);
-            greenLight.rotation.y = Math.PI;
-            trafficLightGroup.add(greenLight);
-            
-            // Add traffic light state
-            trafficLightGroup.userData.state = Math.floor(Math.random() * 3); // 0: red, 1: yellow, 2: green
-            trafficLightGroup.userData.timer = Math.random() * 10;
-            trafficLightGroup.userData.lights = [redLight, yellowLight, greenLight];
-            
-            return trafficLightGroup;
-        }
-        
-        // -------- TRAFFIC & PEDESTRIANS --------
-        function createVehicles() {
-            const vehicles = new THREE.Group();
-            
-            // Create cars on east-west streets
-            for (let x = -citySize/2; x < citySize/2; x += blockSize + roadWidth) {
-                for (let z = -citySize/2 + roadWidth/4; z < citySize/2; z += blockSize + roadWidth) {
-                    if (Math.random() > 0.7) {
-                        const car = createCar();
-                        car.position.set(citySize/2, 0.6, z);
-                        car.rotation.y = Math.PI;
-                        car.userData.direction = 'west';
-                        car.userData.speed = 0.1 + Math.random() * 0.2;
-                        vehicles.add(car);
-                    }
+                for (let i = 0; i < acCount; i++) {
+                    const acSize = 1 + Math.random();
+                    const acGeometry = new THREE.BoxGeometry(acSize, acSize, acSize);
+                    const acMaterial = new THREE.MeshStandardMaterial({ color: 0x999999 });
+                    const ac = new THREE.Mesh(acGeometry, acMaterial);
                     
-                    if (Math.random() > 0.7) {
-                        const car = createCar();
-                        car.position.set(-citySize/2, 0.6, z - roadWidth/2);
-                        car.userData.direction = 'east';
-                        car.userData.speed = 0.1 + Math.random() * 0.2;
-                        vehicles.add(car);
-                    }
-                }
-            }
-            
-            // Create cars on north-south streets
-            for (let z = -citySize/2; z < citySize/2; z += blockSize + roadWidth) {
-                for (let x = -citySize/2 + roadWidth/4; x < citySize/2; x += blockSize + roadWidth) {
-                    if (Math.random() > 0.7) {
-                        const car = createCar();
-                        car.position.set(x, 0.6, citySize/2);
-                        car.rotation.y = -Math.PI/2;
-                        car.userData.direction = 'north';
-                        car.userData.speed = 0.1 + Math.random() * 0.2;
-                        vehicles.add(car);
-                    }
+                    const offsetX = (Math.random() - 0.5) * buildingSize * 0.7;
+                    const offsetZ = (Math.random() - 0.5) * buildingSize * 0.7;
                     
-                    if (Math.random() > 0.7) {
-                        const car = createCar();
-                        car.position.set(x - roadWidth/2, 0.6, -citySize/2);
-                        car.rotation.y = Math.PI/2;
-                        car.userData.direction = 'south';
-                        car.userData.speed = 0.1 + Math.random() * 0.2;
-                        vehicles.add(car);
-                    }
+                    ac.position.set(x + offsetX, buildingHeight + acSize/2, z + offsetZ);
+                    ac.castShadow = true;
+                    scene.add(ac);
                 }
             }
-            
-            scene.add(vehicles);
-            return vehicles;
         }
-        
-        function createCar() {
-            const carGroup = new THREE.Group();
+
+        // Create skyscrapers
+        function createSkyscraper(x, z) {
+            const width = 10 + Math.random() * 5;
+            const depth = 10 + Math.random() * 5;
+            const height = 40 + Math.random() * 30;
             
-            // Random car color
-            const colors = [0xFF0000, 0x00FF00, 0x0000FF, 0xFFFF00, 0xFF00FF, 0x00FFFF, 0xFFFFFF, 0x000000];
-            const carColor = colors[Math.floor(Math.random() * colors.length)];
+            // Base color
+            const baseColor = new THREE.Color(
+                0.3 + Math.random() * 0.2,
+                0.3 + Math.random() * 0.2,
+                0.3 + Math.random() * 0.2
+            );
             
-            // Car body
-            const bodyGeometry = new THREE.BoxGeometry(2, 0.6, 1);
-            const bodyMaterial = new THREE.MeshStandardMaterial({ 
-                color: carColor,
-                roughness: 0.2,
+            // Main structure
+            const geometry = new THREE.BoxGeometry(width, height, depth);
+            const material = new THREE.MeshStandardMaterial({ 
+                color: baseColor,
+                roughness: 0.3,
                 metalness: 0.8
             });
-            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-            body.castShadow = true;
-            carGroup.add(body);
             
-            // Car top
-            const topGeometry = new THREE.BoxGeometry(1.2, 0.4, 0.8);
-            const top = new THREE.Mesh(topGeometry, bodyMaterial);
-            top.position.set(-0.1, 0.5, 0);
-            top.castShadow = true;
-            carGroup.add(top);
+            const skyscraper = new THREE.Mesh(geometry, material);
+            skyscraper.position.set(x, height/2, z);
+            skyscraper.castShadow = true;
+            skyscraper.receiveShadow = true;
+            scene.add(skyscraper);
             
-            // Wheels
-            const wheelGeometry = new THREE.CylinderGeometry(0.2, 0.2, 0.1, 16);
-            const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x111111 });
+            // Create windows
+            createSkyscraperWindows(skyscraper, width, depth, height);
             
-            const wheels = [
-                { x: 0.6, z: 0.5 },
-                { x: 0.6, z: -0.5 },
-                { x: -0.6, z: 0.5 },
-                { x: -0.6, z: -0.5 }
-            ];
-            
-            wheels.forEach(pos => {
-                const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
-                wheel.position.set(pos.x, -0.2, pos.z);
-                wheel.rotation.z = Math.PI / 2;
-                wheel.castShadow = true;
-                carGroup.add(wheel);
+            // Add antenna or spire to some skyscrapers
+            if (Math.random() > 0.6) {
+                const spireHeight = 5 + Math.random() * 10;
+                const spireGeometry = new THREE.CylinderGeometry(0.5, 0.5, spireHeight, 8);
+                const spireMaterial = new THREE.MeshStandardMaterial({ color: 0x888888 });
+                const spire = new THREE.Mesh(spireGeometry, spireMaterial);
+                spire.position.set(x, height + spireHeight/2, z);
+                spire.castShadow = true;
+                scene.add(spire);
+            }
+        }
+
+        // Create windows for skyscrapers
+        function createSkyscraperWindows(skyscraper, width, depth, height) {
+            const windowGeometry = new THREE.PlaneGeometry(0.5, 0.8);
+            const glassMaterial = new THREE.MeshStandardMaterial({
+                color: 0xADDEFF,
+                transparent: true,
+                opacity: 0.7,
+                emissive: new THREE.Color(0.1, 0.1, 0.2)
             });
             
+            const windowSpacing = 1.5;
+            const floorsCount = Math.floor(height / windowSpacing);
+            const windowsPerWidth = Math.floor(width / windowSpacing);
+            const windowsPerDepth = Math.floor(depth / windowSpacing);
+            
+            // Add windows to front and back
+            for (let floor = 1; floor < floorsCount; floor++) {
+                for (let w = 0; w < windowsPerWidth; w++) {
+                    const wx = -width/2 + w * windowSpacing + windowSpacing/2;
+                    const wy = floor * windowSpacing;
+                    
+                    // Front
+                    const frontWindow = new THREE.Mesh(windowGeometry, glassMaterial);
+                    frontWindow.position.set(wx, wy, depth/2 + 0.01);
+                    skyscraper.add(frontWindow);
+                    
+                    // Back
+                    const backWindow = new THREE.Mesh(windowGeometry, glassMaterial);
+                    backWindow.position.set(wx, wy, -depth/2 - 0.01);
+                    backWindow.rotation.y = Math.PI;
+                    skyscraper.add(backWindow);
+                }
+            }
+            
+            // Add windows to left and right
+            for (let floor = 1; floor < floorsCount; floor++) {
+                for (let w = 0; w < windowsPerDepth; w++) {
+                    const wz = -depth/2 + w * windowSpacing + windowSpacing/2;
+                    const wy = floor * windowSpacing;
+                    
+                    // Left
+                    const leftWindow = new THREE.Mesh(windowGeometry, glassMaterial);
+                    leftWindow.position.set(-width/2 - 0.01, wy, wz);
+                    leftWindow.rotation.y = -Math.PI / 2;
+                    skyscraper.add(leftWindow);
+                    
+                    // Right
+                    const rightWindow = new THREE.Mesh(windowGeometry, glassMaterial);
+                    rightWindow.position.set(width/2 + 0.01, wy, wz);
+                    rightWindow.rotation.y = Math.PI / 2;
+                    skyscraper.add(rightWindow);
+                }
+            }
+        }
+
+        // Create park
+        function createPark(x, z) {
+            // Create grass
+            const grassGeometry = new THREE.PlaneGeometry(blockSize, blockSize);
+            const grassMaterial = new THREE.MeshStandardMaterial({ color: 0x33AA33 });
+            const grass = new THREE.Mesh(grassGeometry, grassMaterial);
+            grass.rotation.x = -Math.PI / 2;
+            grass.position.set(x, 0.02, z);
+            grass.receiveShadow = true;
+            scene.add(grass);
+            
+            // Add trees
+            const treeCount = 3 + Math.floor(Math.random() * 5);
+            for (let i = 0; i < treeCount; i++) {
+                const tx = x + (Math.random() - 0.5) * blockSize * 0.8;
+                const tz = z + (Math.random() - 0.5) * blockSize * 0.8;
+                createTree(tx, tz);
+            }
+            
+            // Add benches
+            const benchCount = Math.floor(Math.random() * 3);
+            for (let i = 0; i < benchCount; i++) {
+                const bx = x + (Math.random() - 0.5) * blockSize * 0.7;
+                const bz = z + (Math.random() - 0.5) * blockSize * 0.7;
+                createBench(bx, bz);
+            }
+            
+            // Add a lamp post
+            if (Math.random() > 0.5) {
+                const lx = x + (Math.random() - 0.5) * blockSize * 0.6;
+                const lz = z + (Math.random() - 0.5) * blockSize * 0.6;
+                createLampPost(lx, lz);
+            }
+            
+            // Add a fountain or statue (sometimes)
+            if (Math.random() > 0.7) {
+                createFountain(x, z);
+            }
+        }
+
+        // Create a tree
+        function createTree(x, z) {
+            // Tree trunk
+            const trunkGeometry = new THREE.CylinderGeometry(0.2, 0.4, 2, 6);
+            const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+            const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+            trunk.position.set(x, 1, z);
+            trunk.castShadow = true;
+            scene.add(trunk);
+            
+            // Tree foliage
+            const foliageGeometry = new THREE.SphereGeometry(1.5, 8, 8);
+            const foliageMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x228B22,
+                roughness: 1
+            });
+            const foliage = new THREE.Mesh(foliageGeometry, foliageMaterial);
+            foliage.position.set(x, 3, z);
+            foliage.castShadow = true;
+            scene.add(foliage);
+        }
+
+        // Create a bench
+        function createBench(x, z) {
+            // Rotate randomly
+            const rotation = Math.random() * Math.PI * 2;
+            
+            // Bench seat
+            const seatGeometry = new THREE.BoxGeometry(2, 0.2, 0.8);
+            const seatMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+            const seat = new THREE.Mesh(seatGeometry, seatMaterial);
+            seat.position.set(x, 0.6, z);
+            seat.rotation.y = rotation;
+            seat.castShadow = true;
+            scene.add(seat);
+            
+            // Bench legs
+            const legGeometry = new THREE.BoxGeometry(0.1, 0.5, 0.8);
+            const legMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+            
+            // Create four legs
+            for (let i = -1; i <= 1; i += 2) {
+                const legX = x + Math.cos(rotation) * i * 0.8;
+                const legZ = z + Math.sin(rotation) * i * 0.8;
+                
+                const leg = new THREE.Mesh(legGeometry, legMaterial);
+                leg.position.set(legX, 0.25, legZ);
+                leg.rotation.y = rotation;
+                leg.castShadow = true;
+                scene.add(leg);
+            }
+            
+            // Back rest
+            const backGeometry = new THREE.BoxGeometry(2, 0.8, 0.2);
+            const backMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+            const back = new THREE.Mesh(backGeometry, backMaterial);
+            
+            const backX = x - Math.sin(rotation) * 0.3;
+            const backZ = z + Math.cos(rotation) * 0.3;
+            
+            back.position.set(backX, 1, backZ);
+            back.rotation.y = rotation;
+            back.castShadow = true;
+            scene.add(back);
+        }
+
+        // Create lamp post
+        function createLampPost(x, z) {
+            // Post
+            const postGeometry = new THREE.CylinderGeometry(0.1, 0.1, 6, 8);
+            const postMaterial = new THREE.MeshStandardMaterial({ color: 0x222222 });
+            const post = new THREE.Mesh(postGeometry, postMaterial);
+            post.position.set(x, 3, z);
+            post.castShadow = true;
+            scene.add(post);
+            
+            // Lamp
+            const lampGeometry = new THREE.SphereGeometry(0.3, 8, 8);
+            const lampMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xFFFF00,
+                emissive: 0xFFFF00,
+                emissiveIntensity: 0.5
+            });
+            const lamp = new THREE.Mesh(lampGeometry, lampMaterial);
+            lamp.position.set(x, 6, z);
+            scene.add(lamp);
+            
+            // Light
+            const light = new THREE.PointLight(0xFFFFAA, 0.8, 15);
+            light.position.set(x, 6, z);
+            scene.add(light);
+            
+            // Add to lights array for day/night cycle
+            streetLights.push({ light, lamp });
+        }
+
+        // Create a fountain
+        function createFountain(x, z) {
+            // Base
+            const baseGeometry = new THREE.CylinderGeometry(3, 3.5, 0.5, 16);
+            const baseMaterial = new THREE.MeshStandardMaterial({ color: 0x999999 });
+            const base = new THREE.Mesh(baseGeometry, baseMaterial);
+            base.position.set(x, 0.25, z);
+            base.receiveShadow = true;
+            scene.add(base);
+            
+            // Water basin
+            const basinGeometry = new THREE.CylinderGeometry(2.8, 2.8, 0.4, 16);
+            const basinMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x3399FF,
+                transparent: true,
+                opacity: 0.7
+            });
+            const basin = new THREE.Mesh(basinGeometry, basinMaterial);
+            basin.position.set(x, 0.55, z);
+            scene.add(basin);
+            
+            // Center pillar
+            const pillarGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1.5, 8);
+            const pillarMaterial = new THREE.MeshStandardMaterial({ color: 0x888888 });
+            const pillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
+            pillar.position.set(x, 1.25, z);
+            pillar.castShadow = true;
+            scene.add(pillar);
+        }
+
+        // Create traffic lights
+        function createTrafficLights() {
+            // Place traffic lights at intersections
+            for (let x = -citySize + roadWidth/2; x < citySize; x += blockSize + roadWidth) {
+                for (let z = -citySize + roadWidth/2; z < citySize; z += blockSize + roadWidth) {
+                    // Skip some intersections
+                    if (Math.random() < 0.5) continue;
+                    
+                    // Create traffic light at intersection corners
+                    createTrafficLight(x + roadWidth/2 - 1, z + roadWidth/2 - 1, Math.PI/4);
+                    createTrafficLight(x - roadWidth/2 + 1, z + roadWidth/2 - 1, Math.PI*3/4);
+                    createTrafficLight(x - roadWidth/2 + 1, z - roadWidth/2 + 1, Math.PI*5/4);
+                    createTrafficLight(x + roadWidth/2 - 1, z - roadWidth/2 + 1, Math.PI*7/4);
+                    
+                    // Create pedestrian crossing
+                    createCrossing(x, z);
+                }
+            }
+        }
+
+        // Create a traffic light
+        function createTrafficLight(x, z, rotation) {
+            // Post
+            const postGeometry = new THREE.CylinderGeometry(0.1, 0.1, 4, 6);
+            const postMaterial = new THREE.MeshStandardMaterial({ color: 0x222222 });
+            const post = new THREE.Mesh(postGeometry, postMaterial);
+            post.position.set(x, 2, z);
+            post.castShadow = true;
+            scene.add(post);
+            
+            // Light box
+            const boxGeometry = new THREE.BoxGeometry(0.4, 1, 0.4);
+            const boxMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+            const box = new THREE.Mesh(boxGeometry, boxMaterial);
+            
+            const boxX = x + Math.cos(rotation) * 0.6;
+            const boxZ = z + Math.sin(rotation) * 0.6;
+            
+            box.position.set(boxX, 3.5, boxZ);
+            box.rotation.y = rotation - Math.PI;
+            box.castShadow = true;
+            scene.add(box);
+            
+            // Lights
+            const colors = [0xFF0000, 0xFFFF00, 0x00FF00];
+            const lightGeometry = new THREE.CircleGeometry(0.12, 8);
+            
+            for (let i = 0; i < 3; i++) {
+                const lightMesh = new THREE.Mesh(
+                    lightGeometry,
+                    new THREE.MeshBasicMaterial({ color: colors[i] })
+                );
+                
+                lightMesh.position.set(0, 0.3 - i * 0.3, 0.21);
+                lightMesh.rotation.y = Math.PI;
+                box.add(lightMesh);
+            }
+            
+            // Add to traffic lights array
+            trafficLights.push({
+                box,
+                rotation,
+                state: Math.floor(Math.random() * 3),
+                timer: Math.random() * 20
+            });
+        }
+
+        // Create pedestrian crossing
+        function createCrossing(x, z) {
+            const stripeWidth = 0.6;
+            const stripeLength = roadWidth - 2;
+            const stripesCount = 6;
+            
+            const stripeMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFFFF });
+            
+            // Horizontal crossing (along z-axis)
+            for (let i = 0; i < stripesCount; i++) {
+                const stripeGeometry = new THREE.PlaneGeometry(stripeWidth, stripeLength);
+                const stripe = new THREE.Mesh(stripeGeometry, stripeMaterial);
+                stripe.rotation.x = -Math.PI / 2;
+                
+                const stripeX = x + (i - stripesCount/2 + 0.5) * stripeWidth * 1.5;
+                stripe.position.set(stripeX, 0.03, z);
+                stripe.receiveShadow = true;
+                scene.add(stripe);
+            }
+            
+            // Vertical crossing (along x-axis)
+            for (let i = 0; i < stripesCount; i++) {
+                const stripeGeometry = new THREE.PlaneGeometry(stripeLength, stripeWidth);
+                const stripe = new THREE.Mesh(stripeGeometry, stripeMaterial);
+                stripe.rotation.x = -Math.PI / 2;
+                
+                const stripeZ = z + (i - stripesCount/2 + 0.5) * stripeWidth * 1.5;
+                stripe.position.set(x, 0.03, stripeZ);
+                stripe.receiveShadow = true;
+                scene.add(stripe);
+            }
+        }
+
+        // Cars
+        const cars = [];
+        function createCars() {
+            const carCount = 30;
+            
+            for (let i = 0; i < carCount; i++) {
+                // Determine road position
+                const onHorizontalRoad = Math.random() > 0.5;
+                let x, z;
+                let lane, direction;
+                
+                if (onHorizontalRoad) {
+                    // Car on horizontal road
+                    z = -citySize + Math.floor((citySize * 2) / (blockSize + roadWidth)) * (blockSize + roadWidth) * Math.random();
+                    z = Math.round(z / (blockSize + roadWidth)) * (blockSize + roadWidth);
+                    
+                    // Position on road (left or right lane)
+                    lane = Math.random() > 0.5 ? 1 : -1;
+                    x = -citySize + Math.random() * citySize * 2;
+                    x = Math.min(Math.max(x, -citySize), citySize);
+                    
+                    // Direction - positive for east, negative for west
+                    direction = lane > 0 ? 1 : -1;
+                    
+                    // Offset from center of road
+                    z += lane * 2;
+                } else {
+                    // Car on vertical road
+                    x = -citySize + Math.floor((citySize * 2) / (blockSize + roadWidth)) * (blockSize + roadWidth) * Math.random();
+                    x = Math.round(x / (blockSize + roadWidth)) * (blockSize + roadWidth);
+                    
+                    // Position on road (left or right lane)
+                    lane = Math.random() > 0.5 ? 1 : -1;
+                    z = -citySize + Math.random() * citySize * 2;
+                    z = Math.min(Math.max(z, -citySize), citySize);
+                    
+                    // Direction - positive for south, negative for north
+                    direction = lane > 0 ? 1 : -1;
+                    
+                    // Offset from center of road
+                    x += lane * 2;
+                }
+                
+                // Create car with random color
+                const randomColor = new THREE.Color(Math.random(), Math.random(), Math.random());
+                const car = createCar(randomColor);
+                
+                // Position car
+                car.position.set(x, 0.6, z);
+                car.rotation.y = onHorizontalRoad ? 
+                    (lane > 0 ? Math.PI / 2 : -Math.PI / 2) : 
+                    (lane > 0 ? 0 : Math.PI);
+                
+                // Add to cars array with movement data
+                cars.push({
+                    mesh: car,
+                    speed: 0.1 + Math.random() * 0.2,
+                    onHorizontalRoad,
+                    direction
+                });
+                
+                scene.add(car);
+            }
+        }
+        
+        // Create a car mesh
+        function createCar(color) {
+            const car = new THREE.Group();
+            
+            // Car body
+            const bodyGeometry = new THREE.BoxGeometry(2, 0.5, 4);
+            const bodyMaterial = new THREE.MeshStandardMaterial({ 
+                color: color,
+                metalness: 0.5,
+                roughness: 0.2
+            });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.y = 0.5;
+            body.castShadow = true;
+            car.add(body);
+            
+            // Car cabin
+            const cabinGeometry = new THREE.BoxGeometry(1.7, 0.5, 2);
+            const cabinMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x444444,
+                metalness: 0.7,
+                roughness: 0.2
+            });
+            const cabin = new THREE.Mesh(cabinGeometry, cabinMaterial);
+            cabin.position.set(0, 1, -0.2);
+            cabin.castShadow = true;
+            car.add(cabin);
+            
+            // Wheels
+            const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 8);
+            const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+            
+            // Front-left wheel
+            const wheel1 = new THREE.Mesh(wheelGeometry, wheelMaterial);
+            wheel1.rotation.z = Math.PI / 2;
+            wheel1.position.set(-1, 0.4, 1);
+            car.add(wheel1);
+            
+            // Front-right wheel
+            const wheel2 = new THREE.Mesh(wheelGeometry, wheelMaterial);
+            wheel2.rotation.z = Math.PI / 2;
+            wheel2.position.set(1, 0.4, 1);
+            car.add(wheel2);
+            
+            // Rear-left wheel
+            const wheel3 = new THREE.Mesh(wheelGeometry, wheelMaterial);
+            wheel3.rotation.z = Math.PI / 2;
+            wheel3.position.set(-1, 0.4, -1);
+            car.add(wheel3);
+            
+            // Rear-right wheel
+            const wheel4 = new THREE.Mesh(wheelGeometry, wheelMaterial);
+            wheel4.rotation.z = Math.PI / 2;
+            wheel4.position.set(1, 0.4, -1);
+            car.add(wheel4);
+            
             // Headlights
-            const headlightGeometry = new THREE.CircleGeometry(0.1, 16);
+            const headlightGeometry = new THREE.SphereGeometry(0.2, 8, 8);
             const headlightMaterial = new THREE.MeshStandardMaterial({ 
                 color: 0xFFFFFF,
                 emissive: 0xFFFFFF,
-                emissiveIntensity: 1
+                emissiveIntensity: 0.5
             });
             
-            const frontLight1 = new THREE.Mesh(headlightGeometry, headlightMaterial);
-            frontLight1.position.set(1.01, 0.1, 0.3);
-            frontLight1.rotation.y = Math.PI / 2;
-            carGroup.add(frontLight1);
+            // Left headlight
+            const headlight1 = new THREE.Mesh(headlightGeometry, headlightMaterial);
+            headlight1.position.set(-0.6, 0.5, 2);
+            headlight1.scale.z = 0.5;
+            car.add(headlight1);
             
-            const frontLight2 = new THREE.Mesh(headlightGeometry, headlightMaterial);
-            frontLight2.position.set(1.01, 0.1, -0.3);
-            frontLight2.rotation.y = Math.PI / 2;
-            carGroup.add(frontLight2);
+            // Right headlight
+            const headlight2 = new THREE.Mesh(headlightGeometry, headlightMaterial);
+            headlight2.position.set(0.6, 0.5, 2);
+            headlight2.scale.z = 0.5;
+            car.add(headlight2);
             
             // Taillights
+            const taillightGeometry = new THREE.SphereGeometry(0.15, 8, 8);
             const taillightMaterial = new THREE.MeshStandardMaterial({ 
                 color: 0xFF0000,
                 emissive: 0xFF0000,
-                emissiveIntensity: 1
+                emissiveIntensity: 0.5
             });
             
-            const backLight1 = new THREE.Mesh(headlightGeometry, taillightMaterial);
-            backLight1.position.set(-1.01, 0.1, 0.3);
-            backLight1.rotation.y = -Math.PI / 2;
-            carGroup.add(backLight1);
+            // Left taillight
+            const taillight1 = new THREE.Mesh(taillightGeometry, taillightMaterial);
+            taillight1.position.set(-0.6, 0.5, -2);
+            taillight1.scale.z = 0.5;
+            car.add(taillight1);
             
-            const backLight2 = new THREE.Mesh(headlightGeometry, taillightMaterial);
-            backLight2.position.set(-1.01, 0.1, -0.3);
-            backLight2.rotation.y = -Math.PI / 2;
-            carGroup.add(backLight2);
+            // Right taillight
+            const taillight2 = new THREE.Mesh(taillightGeometry, taillightMaterial);
+            taillight2.position.set(0.6, 0.5, -2);
+            taillight2.scale.z = 0.5;
+            car.add(taillight2);
             
-            return carGroup;
+            return car;
         }
         
+        // Create pedestrians
+        const pedestrians = [];
         function createPedestrians() {
-            const pedestrians = new THREE.Group();
+            const pedestrianCount = 20;
             
-            // Create pedestrians on sidewalks
-            for (let x = -citySize/2; x < citySize/2; x += blockSize + roadWidth) {
-                for (let z = -citySize/2; z < citySize/2; z += blockSize + roadWidth) {
-                    // Sidewalks around this block
-                    if (Math.random() > 0.5) {
-                        createPedestrianBatch(x, z, 'north', pedestrians);
-                    }
-                    if (Math.random() > 0.5) {
-                        createPedestrianBatch(x, z, 'south', pedestrians);
-                    }
-                    if (Math.random() > 0.5) {
-                        createPedestrianBatch(x, z, 'east', pedestrians);
-                    }
-                    if (Math.random() > 0.5) {
-                        createPedestrianBatch(x, z, 'west', pedestrians);
-                    }
-                }
-            }
-            
-            scene.add(pedestrians);
-            return pedestrians;
-        }
-        
-        function createPedestrianBatch(blockX, blockZ, side, pedestrians) {
-            const count = 1 + Math.floor(Math.random() * 3);
-            const sidewalkOffset = (blockSize / 2) + 3; // 3 units from the edge of the block
-            
-            for (let i = 0; i < count; i++) {
+            for (let i = 0; i < pedestrianCount; i++) {
+                // Choose either sidewalk or crossing
+                const onCrossing = Math.random() < 0.2;
                 let x, z, direction;
                 
-                switch(side) {
-                    case 'north':
-                        x = blockX + (Math.random() - 0.5) * blockSize;
-                        z = blockZ - sidewalkOffset;
-                        direction = Math.random() > 0.5 ? 'east' : 'west';
-                        break;
-                    case 'south':
-                        x = blockX + (Math.random() - 0.5) * blockSize;
-                        z = blockZ + sidewalkOffset;
-                        direction = Math.random() > 0.5 ? 'east' : 'west';
-                        break;
-                    case 'east':
-                        x = blockX + sidewalkOffset;
-                        z = blockZ + (Math.random() - 0.5) * blockSize;
-                        direction = Math.random() > 0.5 ? 'north' : 'south';
-                        break;
-                    case 'west':
-                        x = blockX - sidewalkOffset;
-                        z = blockZ + (Math.random() - 0.5) * blockSize;
-                        direction = Math.random() > 0.5 ? 'north' : 'south';
-                        break;
+                if (onCrossing) {
+                    // Position on a crossing
+                    const roadIndex = Math.floor(Math.random() * (citySize * 2 / (blockSize + roadWidth)));
+                    const roadPos = -citySize + roadIndex * (blockSize + roadWidth);
+                    
+                    if (Math.random() > 0.5) {
+                        // Horizontal crossing
+                        x = -citySize + Math.random() * citySize * 2;
+                        z = roadPos;
+                        direction = Math.random() > 0.5 ? 0 : Math.PI;
+                    } else {
+                        // Vertical crossing
+                        x = roadPos;
+                        z = -citySize + Math.random() * citySize * 2;
+                        direction = Math.random() > 0.5 ? Math.PI / 2 : -Math.PI / 2;
+                    }
+                } else {
+                    // Position on sidewalk
+                    if (Math.random() > 0.5) {
+                        // Horizontal sidewalk
+                        const roadIndex = Math.floor(Math.random() * (citySize * 2 / (blockSize + roadWidth)));
+                        const roadPos = -citySize + roadIndex * (blockSize + roadWidth);
+                        z = roadPos + (Math.random() > 0.5 ? roadWidth/2 + 1 : -roadWidth/2 - 1);
+                        x = -citySize + Math.random() * citySize * 2;
+                        direction = Math.random() > 0.5 ? 0 : Math.PI;
+                    } else {
+                        // Vertical sidewalk
+                        const roadIndex = Math.floor(Math.random() * (citySize * 2 / (blockSize + roadWidth)));
+                        const roadPos = -citySize + roadIndex * (blockSize + roadWidth);
+                        x = roadPos + (Math.random() > 0.5 ? roadWidth/2 + 1 : -roadWidth/2 - 1);
+                        z = -citySize + Math.random() * citySize * 2;
+                        direction = Math.random() > 0.5 ? Math.PI / 2 : -Math.PI / 2;
+                    }
                 }
                 
-                if (!isIntersection(x, z)) {
-                    const pedestrian = createPedestrian();
-                    pedestrian.position.set(x, 0, z);
-                    
-                    switch(direction) {
-                        case 'north':
-                            pedestrian.rotation.y = -Math.PI / 2;
-                            break;
-                        case 'south':
-                            pedestrian.rotation.y = Math.PI / 2;
-                            break;
-                        case 'east':
-                            pedestrian.rotation.y = 0;
-                            break;
-                        case 'west':
-                            pedestrian.rotation.y = Math.PI;
-                            break;
-                    }
-                    
-                    pedestrian.userData.direction = direction;
-                    pedestrian.userData.speed = 0.03 + Math.random() * 0.02;
-                    pedestrian.userData.state = 'walking';
-                    pedestrian.userData.waitTime = 0;
-                    pedestrian.userData.blockX = blockX;
-                    pedestrian.userData.blockZ = blockZ;
-                    pedestrian.userData.side = side;
-                    
-                    pedestrians.add(pedestrian);
-                }
+                // Create pedestrian
+                const pedestrian = createPedestrian();
+                pedestrian.position.set(x, 0, z);
+                pedestrian.rotation.y = direction;
+                
+                pedestrians.push({
+                    mesh: pedestrian,
+                    speed: 0.02 + Math.random() * 0.03,
+                    direction,
+                    waitTime: 0
+                });
+                
+                scene.add(pedestrian);
             }
         }
         
+        // Create a pedestrian mesh
         function createPedestrian() {
-            const pedestrianGroup = new THREE.Group();
+            const pedestrian = new THREE.Group();
             
-            // Random pedestrian color
-            const bodyColors = [0x8B4513, 0xD2691E, 0xCD853F, 0xF5DEB3, 0xFFDEAD];
-            const clothesColors = [0x000080, 0x8B0000, 0x006400, 0x4B0082, 0x800080, 0x000000];
-            
-            const bodyColor = bodyColors[Math.floor(Math.random() * bodyColors.length)];
-            const clothesColor = clothesColors[Math.floor(Math.random() * clothesColors.length)];
+            // Random color for clothes
+            const clothesColor = new THREE.Color(
+                Math.random(),
+                Math.random(),
+                Math.random()
+            );
             
             // Body
-            const bodyGeometry = new THREE.CylinderGeometry(0.2, 0.2, 0.7, 8);
+            const bodyGeometry = new THREE.CylinderGeometry(0.2, 0.2, 0.8, 8);
             const bodyMaterial = new THREE.MeshStandardMaterial({ color: clothesColor });
             const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-            body.position.y = 0.6;
+            body.position.y = 0.9;
             body.castShadow = true;
-            pedestrianGroup.add(body);
+            pedestrian.add(body);
             
             // Head
-            const headGeometry = new THREE.SphereGeometry(0.15, 16, 16);
-            const headMaterial = new THREE.MeshStandardMaterial({ color: bodyColor });
+            const headGeometry = new THREE.SphereGeometry(0.15, 8, 8);
+            const headMaterial = new THREE.MeshStandardMaterial({ color: 0xFFDBAC });
             const head = new THREE.Mesh(headGeometry, headMaterial);
-            head.position.y = 1.1;
+            head.position.y = 1.45;
             head.castShadow = true;
-            pedestrianGroup.add(head);
+            pedestrian.add(head);
             
             // Arms
-            const armGeometry = new THREE.BoxGeometry(0.1, 0.4, 0.1);
-            const armMaterial = new THREE.MeshStandardMaterial({ color: bodyColor });
+            const armGeometry = new THREE.BoxGeometry(0.1, 0.5, 0.1);
+            const armMaterial = new THREE.MeshStandardMaterial({ color: clothesColor });
             
-            const leftArm = new THREE.Mesh(armGeometry, clothesColor);
-            leftArm.position.set(0, 0.7, 0.2);
+            // Left arm
+            const leftArm = new THREE.Mesh(armGeometry, armMaterial);
+            leftArm.position.set(-0.3, 1.05, 0);
+            leftArm.rotation.z = -Math.PI / 6;
             leftArm.castShadow = true;
-            pedestrianGroup.add(leftArm);
+            pedestrian.add(leftArm);
             
-            const rightArm = new THREE.Mesh(armGeometry, clothesColor);
-            rightArm.position.set(0, 0.7, -0.2);
+            // Right arm
+            const rightArm = new THREE.Mesh(armGeometry, armMaterial);
+            rightArm.position.set(0.3, 1.05, 0);
+            rightArm.rotation.z = Math.PI / 6;
             rightArm.castShadow = true;
-            pedestrianGroup.add(rightArm);
+            pedestrian.add(rightArm);
             
             // Legs
-            const legGeometry = new THREE.BoxGeometry(0.12, 0.4, 0.12);
-            const legMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 });
+            const legGeometry = new THREE.BoxGeometry(0.12, 0.5, 0.12);
+            const legMaterial = new THREE.MeshStandardMaterial({ color: 0x003366 });
             
+            // Left leg
             const leftLeg = new THREE.Mesh(legGeometry, legMaterial);
-            leftLeg.position.set(0, 0.2, 0.1);
+            leftLeg.position.set(-0.1, 0.25, 0);
             leftLeg.castShadow = true;
-            pedestrianGroup.add(leftLeg);
+            pedestrian.add(leftLeg);
             
+            // Right leg
             const rightLeg = new THREE.Mesh(legGeometry, legMaterial);
-            rightLeg.position.set(0, 0.2, -0.1);
+            rightLeg.position.set(0.1, 0.25, 0);
             rightLeg.castShadow = true;
-            pedestrianGroup.add(rightLeg);
+            pedestrian.add(rightLeg);
             
-            // Animation parts
-            pedestrianGroup.userData.animationParts = {
-                leftLeg,
-                rightLeg,
-                leftArm,
-                rightArm
-            };
-            
-            return pedestrianGroup;
+            return pedestrian;
         }
         
-        // -------- LIGHTING --------
-        // Main lighting system
-        const ambientLight = new THREE.AmbientLight(0xFFFFFF, 0.3);
-        scene.add(ambientLight);
+        // Arrays for animated elements
+        const trafficLights = [];
+        const streetLights = [];
         
-        const sunLight = new THREE.DirectionalLight(0xFFFFFF, 1);
-        sunLight.position.set(50, 100, 50);
-        sunLight.castShadow = true;
-        sunLight.shadow.mapSize.width = 2048;
-        sunLight.shadow.mapSize.height = 2048;
-        sunLight.shadow.camera.near = 10;
-        sunLight.shadow.camera.far = 200;
-        sunLight.shadow.camera.left = -100;
-        sunLight.shadow.camera.right = 100;
-        sunLight.shadow.camera.top = 100;
-        sunLight.shadow.camera.bottom = -100;
-        scene.add(sunLight);
-        
-        // Hemisphere light for sky/ground ambient
-        const hemisphereLight = new THREE.HemisphereLight(0x87CEEB, 0x555555, 0.2);
-        scene.add(hemisphereLight);
-        
-        // Create sky
-        function createSky() {
-            const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
-            const skyMaterial = new THREE.MeshBasicMaterial({
-                color: 0x87CEEB,
-                side: THREE.BackSide
-            });
-            const sky = new THREE.Mesh(skyGeometry, skyMaterial);
-            scene.add(sky);
-            return sky;
+        // Initialize the scene
+        function init() {
+            createRoads();
+            createBuildings();
+            createTrafficLights();
+            createCars();
+            createPedestrians();
+            
+            // Set up camera controls
+            setupCameraControls();
+            
+            // Start animation loop
+            animate();
         }
         
-        const sky = createSky();
+        // Camera controls
+        const keys = {};
+        const moveSpeed = 0.5;
+        const rotateSpeed = 0.02;
         
-        // Day/night cycle
-        const timeSlider = document.getElementById('time-slider');
-        const timeDisplay = document.getElementById('time-display');
-        
-        function updateDayNightCycle(time) {
-            // Convert 24-hour time to rotation angle (0-24 to 0-2π)
-            const angle = (time / 24) * Math.PI * 2 - Math.PI / 2;
+        function setupCameraControls() {
+            // Mouse controls for rotation
+            let isDragging = false;
+            let previousMousePosition = { x: 0, y: 0 };
             
-            // Sun position on a circle in the sky
-            const radius = 200;
-            sunLight.position.x = Math.cos(angle) * radius;
-            sunLight.position.y = Math.sin(angle) * radius;
-            sunLight.position.z = 0;
-            
-            // Update time display
-            const hours = Math.floor(time);
-            const minutes = Math.floor((time - hours) * 60);
-            timeDisplay.textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-            
-            // Sky color based on time
-            let skyColor, lightIntensity, ambientIntensity;
-            
-            if (time >= 6 && time <= 18) {
-                // Daytime
-                const dayProgress = Math.sin((time - 6) / 12 * Math.PI);
-                skyColor = new THREE.Color(0x87CEEB).lerp(new THREE.Color(0x4169E1), 1 - dayProgress);
-                lightIntensity = 0.8 + dayProgress * 0.2;
-                ambientIntensity = 0.3 + dayProgress * 0.2;
-                hemisphereLight.intensity = 0.2 + dayProgress * 0.3;
-            } else {
-                // Nighttime
-                skyColor = new THREE.Color(0x000022);
-                lightIntensity = 0.2;
-                ambientIntensity = 0.1;
-                hemisphereLight.intensity = 0.1;
-            }
-            
-            sky.material.color = skyColor;
-            sunLight.intensity = lightIntensity;
-            ambientLight.intensity = ambientIntensity;
-            
-            // Update lamp lights based on time
-            scene.traverse(object => {
-                if (object.userData.isLampLightSource) {
-                    // Lamps are brighter at night
-                    if (time >= 18 || time <= 6) {
-                        object.intensity = 0.7;
-                    } else {
-                        object.intensity = 0.1;
-                    }
-                }
-                
-                if (object.userData.isLampLight) {
-                    // Lamp emissive intensity
-                    if (time >= 18 || time <= 6) {
-                        object.material.emissiveIntensity = 1;
-                    } else {
-                        object.material.emissiveIntensity = 0.2;
-                    }
-                }
+            document.addEventListener('mousedown', (e) => {
+                isDragging = true;
             });
             
-            // Update building windows
-            scene.traverse(object => {
-                if (object.material && object.material.emissive && 
-                    object.parent && object.parent.parent && 
-                    object.geometry && object.geometry.type === 'PlaneGeometry' && 
-                    object.geometry.parameters.width === 1) {
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+            
+            document.addEventListener('mousemove', (e) => {
+                if (isDragging) {
+                    const deltaMove = {
+                        x: e.clientX - previousMousePosition.x,
+                        y: e.clientY - previousMousePosition.y
+                    };
                     
-                    // This is probably a window
-                    if (time >= 18 || time <= 6) {
-                        // Night time - random window lights
-                        if (Math.random() > 0.4) {
-                            object.material.emissiveIntensity = 0.8 + Math.random() * 0.2;
-                        } else {
-                            object.material.emissiveIntensity = 0.1;
-                        }
-                    } else {
-                        // Day time - dim windows
-                        object.material.emissiveIntensity = 0.1;
+                    if (deltaMove.x !== 0) {
+                        camera.rotation.y -= deltaMove.x * 0.01;
                     }
+                    
+                    if (deltaMove.y !== 0) {
+                        const newRotationX = camera.rotation.x - deltaMove.y * 0.01;
+                        // Limit vertical rotation to avoid flipping
+                        camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, newRotationX));
+                    }
+                }
+                
+                previousMousePosition = {
+                    x: e.clientX,
+                    y: e.clientY
+                };
+            });
+            
+            // Keyboard controls for movement
+            document.addEventListener('keydown', (e) => {
+                keys[e.key.toLowerCase()] = true;
+            });
+            
+            document.addEventListener('keyup', (e) => {
+                keys[e.key.toLowerCase()] = false;
+            });
+            
+            // Add touch controls for mobile
+            document.addEventListener('touchstart', (e) => {
+                isDragging = true;
+                previousMousePosition = {
+                    x: e.touches[0].clientX,
+                    y: e.touches[0].clientY
+                };
+            });
+            
+            document.addEventListener('touchend', () => {
+                isDragging = false;
+            });
+            
+            document.addEventListener('touchmove', (e) => {
+                if (isDragging) {
+                    const deltaMove = {
+                        x: e.touches[0].clientX - previousMousePosition.x,
+                        y: e.touches[0].clientY - previousMousePosition.y
+                    };
+                    
+                    if (deltaMove.x !== 0) {
+                        camera.rotation.y -= deltaMove.x * 0.01;
+                    }
+                    
+                    if (deltaMove.y !== 0) {
+                        const newRotationX = camera.rotation.x - deltaMove.y * 0.01;
+                        camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, newRotationX));
+                    }
+                    
+                    previousMousePosition = {
+                        x: e.touches[0].clientX,
+                        y: e.touches[0].clientY
+                    };
                 }
             });
         }
         
-        timeSlider.addEventListener('input', function() {
-            updateDayNightCycle(parseFloat(this.value));
-        });
+        // Time system
+        let timeOfDay = 0; // 0-24 hours
+        const timeSpeed = 0.01; // Time passing speed
         
-        // Initial time setting
-        updateDayNightCycle(12);
-        
-        // -------- CAMERA CONTROLS --------
-        // Simple camera controls
-        const keys = {
-            w: false,
-            a: false,
-            s: false,
-            d: false,
-            ArrowUp: false,
-            ArrowDown: false,
-            ArrowLeft: false,
-            ArrowRight: false
-        };
-        
-        window.addEventListener('keydown', (e) => {
-            if (keys.hasOwnProperty(e.key)) {
-                keys[e.key] = true;
-            }
-        });
-        
-        window.addEventListener('keyup', (e) => {
-            if (keys.hasOwnProperty(e.key)) {
-                keys[e.key] = false;
-            }
-        });
-        
-        // Mouse controls
-        let mouseDown = false;
-        let mouseX = 0;
-        let mouseY = 0;
-        let targetRotationX = 0;
-        let targetRotationY = 0;
-        const mouseSpeed = 0.003;
-        
-        window.addEventListener('mousedown', (e) => {
-            mouseDown = true;
-            mouseX = e.clientX;
-            mouseY = e.clientY;
-        });
-        
-        window.addEventListener('mouseup', () => {
-            mouseDown = false;
-        });
-        
-        window.addEventListener('mousemove', (e) => {
-            if (mouseDown) {
-                const deltaX = e.clientX - mouseX;
-                const deltaY = e.clientY - mouseY;
-                
-                targetRotationX -= deltaX * mouseSpeed;
-                targetRotationY = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, targetRotationY - deltaY * mouseSpeed));
-                
-                mouseX = e.clientX;
-                mouseY = e.clientY;
-            }
-        });
-        
-        // Zoom controls
-        window.addEventListener('wheel', (e) => {
-            camera.position.y = Math.max(2, Math.min(100, camera.position.y + e.deltaY * 0.01));
-        });
-        
-        // -------- ANIMATION & GAME LOOP --------
-        function animate() {
-            requestAnimationFrame(animate);
+        // Update camera position based on keyboard input
+        function updateCamera() {
+            // Get direction vectors
+            const direction = new THREE.Vector3();
+            camera.getWorldDirection(direction);
             
-            // Handle camera movement
-            const cameraSpeed = 0.5;
-            const rotationSpeed = 0.02;
-            
-            // Gradually rotate to target rotation for smooth camera movement
-            camera.rotation.y += (targetRotationX - camera.rotation.y) * 0.1;
-            
-            // Calculate forward direction based on camera rotation
-            const forward = new THREE.Vector3(
-                Math.sin(camera.rotation.y),
-                0,
-                Math.cos(camera.rotation.y)
-            );
-            
-            // Calculate right direction (perpendicular to forward)
-            const right = new THREE.Vector3(
-                Math.sin(camera.rotation.y + Math.PI / 2),
-                0,
-                Math.cos(camera.rotation.y + Math.PI / 2)
-            );
+            const sideDirection = new THREE.Vector3();
+            sideDirection.crossVectors(direction, new THREE.Vector3(0, 1, 0));
             
             // WASD movement
-            if (keys.w) {
-                camera.position.x += forward.x * cameraSpeed;
-                camera.position.z += forward.z * cameraSpeed;
+            if (keys['w']) {
+                camera.position.addScaledVector(direction, moveSpeed);
             }
-            if (keys.s) {
-                camera.position.x -= forward.x * cameraSpeed;
-                camera.position.z -= forward.z * cameraSpeed;
+            if (keys['s']) {
+                camera.position.addScaledVector(direction, -moveSpeed);
             }
-            if (keys.a) {
-                camera.position.x -= right.x * cameraSpeed;
-                camera.position.z -= right.z * cameraSpeed;
+            if (keys['a']) {
+                camera.position.addScaledVector(sideDirection, moveSpeed);
             }
-            if (keys.d) {
-                camera.position.x += right.x * cameraSpeed;
-                camera.position.z += right.z * cameraSpeed;
+            if (keys['d']) {
+                camera.position.addScaledVector(sideDirection, -moveSpeed);
             }
             
-            // Arrow keys for rotation
-            if (keys.ArrowLeft) {
-                targetRotationX += rotationSpeed;
+            // Q/E for time control
+            if (keys['q']) {
+                timeOfDay = (timeOfDay - timeSpeed * 5) % 24;
+                if (timeOfDay < 0) timeOfDay += 24;
+                updateDayNightCycle();
             }
-            if (keys.ArrowRight) {
-                targetRotationX -= rotationSpeed;
+            if (keys['e']) {
+                timeOfDay = (timeOfDay + timeSpeed * 5) % 24;
+                updateDayNightCycle();
             }
-            if (keys.ArrowUp) {
-                targetRotationY = Math.max(-Math.PI / 2, targetRotationY - rotationSpeed);
-            }
-            if (keys.ArrowDown) {
-                targetRotationY = Math.min(Math.PI / 2, targetRotationY + rotationSpeed);
-            }
+        }
+        
+        // Update day/night cycle lighting
+        function updateDayNightCycle() {
+            // Update time of day
+            timeOfDay = (timeOfDay + timeSpeed) % 24;
             
-            // Keep camera within city bounds
-            const maxBound = citySize / 2;
-            camera.position.x = Math.max(-maxBound, Math.min(maxBound, camera.position.x));
-            camera.position.z = Math.max(-maxBound, Math.min(maxBound, camera.position.z));
+            // Update sun position and intensity
+            const sunAngle = (timeOfDay / 24) * Math.PI * 2 - Math.PI / 2;
+            const sunHeight = Math.sin(sunAngle);
+            const sunDistance = 200;
             
-            // Animate vehicles
-            scene.traverse(object => {
-                if (object.userData.direction) {
-                    let speedMultiplier = 1;
+            sunLight.position.set(
+                Math.cos(sunAngle) * sunDistance,
+                sunHeight * sunDistance,
+                Math.sin(sunAngle) * sunDistance
+            );
+            
+            // Day/night lighting
+            if (sunHeight > 0) {
+                // Daytime
+                const intensity = Math.min(1, sunHeight * 2);
+                sunLight.intensity = intensity;
+                ambientLight.intensity = 0.2 + 0.2 * intensity;
+                scene.background = new THREE.Color(
+                    0.5 + 0.3 * intensity,
+                    0.7 + 0.3 * intensity,
+                    0.9 + 0.1 * intensity
+                );
+                
+                // Turn off street lights during day
+                streetLights.forEach(item => {
+                    item.light.intensity = 0;
+                    item.lamp.material.emissiveIntensity = 0.1;
+                });
+            } else {
+                // Nighttime
+                const darkness = Math.abs(sunHeight);
+                sunLight.intensity = 0.1;
+                ambientLight.intensity = Math.max(0.1, 0.2 - darkness * 0.1);
+                scene.background = new THREE.Color(
+                    0.05,
+                    0.05,
+                    0.1
+                );
+                
+                // Turn on street lights at night
+                streetLights.forEach(item => {
+                    item.light.intensity = 1;
+                    item.lamp.material.emissiveIntensity = 0.8;
+                });
+            }
+        }
+        
+        // Update traffic lights
+        function updateTrafficLights(deltaTime) {
+            trafficLights.forEach(light => {
+                light.timer -= deltaTime;
+                
+                if (light.timer <= 0) {
+                    // Cycle through states (red, yellow, green)
+                    light.state = (light.state + 1) % 3;
+                    light.timer = light.state === 1 ? 2 : 5; // Yellow is shorter
                     
-                    // Check for traffic lights if near intersection
-                    if (object.userData.direction === 'east' || object.userData.direction === 'west') {
-                        // Check if near intersection on X axis
-                        const xMod = Math.abs(object.position.x) % (blockSize + roadWidth);
-                        if (xMod < 3 || xMod > blockSize + roadWidth - 3) {
-                            // Find nearest traffic light
-                            scene.traverse(trafficLight => {
-                                if (trafficLight.userData.state !== undefined && 
-                                    Math.abs(trafficLight.position.x - object.position.x) < 5 &&
-                                    Math.abs(trafficLight.position.z - object.position.z) < 5) {
-                                    
-                                    // Red light
-                                    if (trafficLight.userData.state === 0) {
-                                        speedMultiplier = 0;
-                                    }
-                                    // Yellow light
-                                    else if (trafficLight.userData.state === 1) {
-                                        speedMultiplier = 0.3;
-                                    }
-                                }
-                            });
-                        }
-                    }
-                    else if (object.userData.direction === 'north' || object.userData.direction === 'south') {
-                        // Check if near intersection on Z axis
-                        const zMod = Math.abs(object.position.z) % (blockSize + roadWidth);
-                        if (zMod < 3 || zMod > blockSize + roadWidth - 3) {
-                            // Find nearest traffic light
-                            scene.traverse(trafficLight => {
-                                if (trafficLight.userData.state !== undefined && 
-                                    Math.abs(trafficLight.position.x - object.position.x) < 5 &&
-                                    Math.abs(trafficLight.position.z - object.position.z) < 5) {
-                                    
-                                    // Red light
-                                    if (trafficLight.userData.state === 0) {
-                                        speedMultiplier = 0;
-                                    }
-                                    // Yellow light
-                                    else if (trafficLight.userData.state === 1) {
-                                        speedMultiplier = 0.3;
-                                    }
-                                }
-                            });
-                        }
-                    }
-                    
-                    // Move the vehicle
-                    const speed = object.userData.speed * speedMultiplier;
-                    
-                    if (object.userData.direction === 'east') {
-                        object.position.x += speed;
-                        if (object.position.x > citySize/2) {
-                            object.position.x = -citySize/2;
-                        }
-                    } else if (object.userData.direction === 'west') {
-                        object.position.x -= speed;
-                        if (object.position.x < -citySize/2) {
-                            object.position.x = citySize/2;
-                        }
-                    } else if (object.userData.direction === 'north') {
-                        object.position.z -= speed;
-                        if (object.position.z < -citySize/2) {
-                            object.position.z = citySize/2;
-                        }
-                    } else if (object.userData.direction === 'south') {
-                        object.position.z += speed;
-                        if (object.position.z > citySize/2) {
-                            object.position.z = -citySize/2;
-                        }
-                    }
-                    
-                    // Animate pedestrians
-                    if (object.userData.animationParts) {
-                        const parts = object.userData.animationParts;
-                        const walkCycle = Date.now() * 0.01;
-                        
-                        if (object.userData.state === 'walking') {
-                            parts.leftLeg.rotation.x = Math.sin(walkCycle) * 0.5;
-                            parts.rightLeg.rotation.x = Math.sin(walkCycle + Math.PI) * 0.5;
-                            parts.leftArm.rotation.x = Math.sin(walkCycle + Math.PI) * 0.3;
-                            parts.rightArm.rotation.x = Math.sin(walkCycle) * 0.3;
-                        } else {
-                            // Reset to standing position
-                            parts.leftLeg.rotation.x = 0;
-                            parts.rightLeg.rotation.x = 0;
-                            parts.leftArm.rotation.x = 0;
-                            parts.rightArm.rotation.x = 0;
-                        }
-                        
-                        // Handle pedestrian behavior near intersections
-                        if (object.userData.direction === 'east' || object.userData.direction === 'west') {
-                            // Check if near intersection on X axis
-                            const xMod = Math.abs(object.position.x) % (blockSize + roadWidth);
-                            if (xMod > blockSize - 2 && xMod < blockSize + 2) {
-                                // Set waiting state randomly
-                                if (object.userData.state === 'walking' && Math.random() > 0.99) {
-                                    object.userData.state = 'waiting';
-                                    object.userData.waitTime = 50 + Math.random() * 100;
-                                }
-                                
-                                // Wait for some time
-                                if (object.userData.state === 'waiting') {
-                                    object.userData.waitTime--;
-                                    if (object.userData.waitTime <= 0) {
-                                        object.userData.state = 'walking';
-                                    }
-                                }
-                            }
-                        }
-                        else if (object.userData.direction === 'north' || object.userData.direction === 'south') {
-                            // Check if near intersection on Z axis
-                            const zMod = Math.abs(object.position.z) % (blockSize + roadWidth);
-                            if (zMod > blockSize - 2 && zMod < blockSize + 2) {
-                                // Set waiting state randomly
-                                if (object.userData.state === 'walking' && Math.random() > 0.99) {
-                                    object.userData.state = 'waiting';
-                                    object.userData.waitTime = 50 + Math.random() * 100;
-                                }
-                                
-                                // Wait for some time
-                                if (object.userData.state === 'waiting') {
-                                    object.userData.waitTime--;
-                                    if (object.userData.waitTime <= 0) {
-                                        object.userData.state = 'walking';
-                                    }
-                                }
-                            }
-                        }
+                    // Update light visuals
+                    for (let i = 0; i < 3; i++) {
+                        const lightMesh = light.box.children[i];
+                        lightMesh.material.emissive = new THREE.Color(
+                            i === light.state ? 0.5 : 0
+                        );
                     }
                 }
             });
+        }
+        
+        // Move cars
+        function moveCars() {
+            cars.forEach(car => {
+                if (car.onHorizontalRoad) {
+                    // Move along x-axis
+                    car.mesh.position.x += car.speed * car.direction;
+                    
+                    // Reset position when out of bounds
+                    if (car.mesh.position.x > citySize + 5) {
+                        car.mesh.position.x = -citySize - 5;
+                    } else if (car.mesh.position.x < -citySize - 5) {
+                        car.mesh.position.x = citySize + 5;
+                    }
+                } else {
+                    // Move along z-axis
+                    car.mesh.position.z += car.speed * car.direction;
+                    
+                    // Reset position when out of bounds
+                    if (car.mesh.position.z > citySize + 5) {
+                        car.mesh.position.z = -citySize - 5;
+                    } else if (car.mesh.position.z < -citySize - 5) {
+                        car.mesh.position.z = citySize + 5;
+                    }
+                }
+            });
+        }
+        
+        // Move pedestrians
+        function movePedestrians() {
+            pedestrians.forEach(pedestrian => {
+                // Check if waiting at crossing
+                if (pedestrian.waitTime > 0) {
+                    pedestrian.waitTime -= 0.1;
+                    return;
+                }
+                
+                // Move based on direction
+                const moveX = Math.cos(pedestrian.direction) * pedestrian.speed;
+                const moveZ = Math.sin(pedestrian.direction) * pedestrian.speed;
+                
+                pedestrian.mesh.position.x += moveX;
+                pedestrian.mesh.position.z += moveZ;
+                
+                // Reset position when out of bounds
+                if (pedestrian.mesh.position.x > citySize + 5) {
+                    pedestrian.mesh.position.x = -citySize - 5;
+                } else if (pedestrian.mesh.position.x < -citySize - 5) {
+                    pedestrian.mesh.position.x = citySize + 5;
+                }
+                
+                if (pedestrian.mesh.position.z > citySize + 5) {
+                    pedestrian.mesh.position.z = -citySize - 5;
+                } else if (pedestrian.mesh.position.z < -citySize - 5) {
+                    pedestrian.mesh.position.z = citySize + 5;
+                }
+                
+                // Random change of direction sometimes
+                if (Math.random() < 0.005) {
+                    pedestrian.direction = Math.random() * Math.PI * 2;
+                    pedestrian.mesh.rotation.y = pedestrian.direction;
+                }
+                
+                // Sometimes wait at crossings
+                if (Math.random() < 0.001) {
+                    pedestrian.waitTime = 10 + Math.random() * 30;
+                }
+            });
+        }
+        
+        // Handle window resize
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        window.addEventListener('resize', onWindowResize, false);
+        
+        // Animation loop
+        let lastTime = 0;
+        function animate(time = 0) {
+            requestAnimationFrame(animate);
+            
+            const deltaTime = (time - lastTime) / 1000; // Convert to seconds
+            lastTime = time;
+            
+            // Update camera position based on controls
+            updateCamera();
+            
+            // Update day/night cycle
+            updateDayNightCycle();
             
             // Update traffic lights
-            scene.traverse(object => {
-                if (object.userData.lights) {
-                    // Update traffic light timers
-                    if (object.userData.timer > 0) {
-                        object.userData.timer--;
-                    } else {
-                        // Change state
-                        object.userData.state = (object.userData.state + 1) % 3;
-                        
-                        // Set timer based on state
-                        switch(object.userData.state) {
-                            case 0: // Red
-                                object.userData.timer = 150;
-                                break;
-                            case 1: // Yellow
-                                object.userData.timer = 50;
-                                break;
-                            case 2: // Green
-                                object.userData.timer = 150;
-                                break;
-                        }
-                    }
-                    
-                    // Update light appearance
-                    for (let i = 0; i < object.userData.lights.length; i++) {
-                        if (i === object.userData.state) {
-                            object.userData.lights[i].material.emissiveIntensity = 1;
-                        } else {
-                            object.userData.lights[i].material.emissiveIntensity = 0.1;
-                        }
-                    }
-                }
-            });
+            updateTrafficLights(deltaTime);
             
+            // Move cars
+            moveCars();
+            
+            // Move pedestrians
+            movePedestrians();
+            
+            // Render scene
             renderer.render(scene, camera);
         }
         
-        // -------- INITIALIZE CITY --------
-        // Generate city components
-        generateCity();
-        createRoads();
-        const vehicles = createVehicles();
-        const pedestrians = createPedestrians();
-        
-        // Start animation loop
-        animate();
+        // Initialize the scene
+        init();
     </script>
 </body>
 </html>
