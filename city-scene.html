@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simplified 3D City Scene</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            z-index: 100;
+            display: block;
+            pointer-events: none;
+            text-shadow: 1px 1px 2px black;
+        }
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            color: white;
+        }
+        .control-btn {
+            background: #4CAF50;
+            border: none;
+            color: white;
+            padding: 5px 10px;
+            margin: 5px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        #debug {
+            position: absolute;
+            top: 40px;
+            left: 10px;
+            color: yellow;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">3D City Scene - Drive with WASD/Arrow Keys</div>
+    <div id="controls">
+        <button id="day-night-toggle" class="control-btn">Toggle Day/Night</button>
+        <button id="camera-toggle" class="control-btn">Toggle Camera View</button>
+    </div>
+    <div id="debug"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Debug function
+        function debug(message) {
+            const debugEl = document.getElementById('debug');
+            debugEl.innerHTML += message + '<br>';
+            console.log(message);
+        }
+
+        debug("Script started");
+
+        try {
+            // Scene setup
+            const scene = new THREE.Scene();
+            debug("Scene created");
+            
+            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            debug("Camera created");
+            
+            const renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x87ceeb); // Sky blue
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+            debug("Renderer created and added to DOM");
+
+            // Global variables
+            let car, thirdPersonCamera = true;
+            let dayTime = true;
+            const clock = new THREE.Clock();
+
+            // Materials
+            const buildingMaterial = new THREE.MeshStandardMaterial({ color: 0x8c8c8c, roughness: 0.7 });
+            const roadMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.9 });
+            const grassMaterial = new THREE.MeshStandardMaterial({ color: 0x33aa33, roughness: 0.9 });
+
+            // Lighting setup
+            function setupLighting(isDay) {
+                // Remove existing lights
+                scene.children.forEach(child => {
+                    if (child.isLight) {
+                        scene.remove(child);
+                    }
+                });
+
+                // Ambient light
+                const ambientIntensity = isDay ? 0.6 : 0.1;
+                const ambientLight = new THREE.AmbientLight(0xffffff, ambientIntensity);
+                scene.add(ambientLight);
+                
+                // Directional light (sun/moon)
+                const directionalColor = isDay ? 0xffffcc : 0x8888ff;
+                const directionalIntensity = isDay ? 1 : 0.2;
+                const directionalLight = new THREE.DirectionalLight(directionalColor, directionalIntensity);
+                directionalLight.position.set(50, 100, 50);
+                directionalLight.castShadow = true;
+                
+                // Shadow properties
+                directionalLight.shadow.mapSize.width = 1024;
+                directionalLight.shadow.mapSize.height = 1024;
+                directionalLight.shadow.camera.near = 10;
+                directionalLight.shadow.camera.far = 200;
+                directionalLight.shadow.camera.left = -50;
+                directionalLight.shadow.camera.right = 50;
+                directionalLight.shadow.camera.top = 50;
+                directionalLight.shadow.camera.bottom = -50;
+                
+                scene.add(directionalLight);
+                
+                // Sky color
+                if (isDay) {
+                    scene.background = new THREE.Color(0x87ceeb); // Sky blue
+                } else {
+                    scene.background = new THREE.Color(0x000033); // Dark blue
+                }
+                
+                debug("Lighting setup complete");
+            }
+
+            // Create ground
+            function createGround() {
+                const groundGeometry = new THREE.PlaneGeometry(500, 500);
+                const ground = new THREE.Mesh(groundGeometry, grassMaterial);
+                ground.rotation.x = -Math.PI / 2;
+                ground.position.y = -0.1;
+                ground.receiveShadow = true;
+                scene.add(ground);
+                debug("Ground created");
+            }
+
+            // Create a simple city grid
+            function createCity() {
+                debug("Creating city...");
+                const gridSize = 3;
+                const blockSize = 40;
+                const streetWidth = 15;
+                
+                // Create grid of blocks and streets
+                for (let x = -gridSize; x <= gridSize; x++) {
+                    for (let z = -gridSize; z <= gridSize; z++) {
+                        // Skip every other block to create streets
+                        if (x % 2 === 0 && z % 2 === 0) {
+                            createBuilding(
+                                x * (blockSize + streetWidth), 
+                                z * (blockSize + streetWidth),
+                                blockSize
+                            );
+                        }
+                        
+                        // Create horizontal streets
+                        if (z % 2 === 0) {
+                            createRoad(
+                                x * (blockSize + streetWidth),
+                                z * (blockSize + streetWidth),
+                                streetWidth,
+                                blockSize,
+                                true
+                            );
+                        }
+                        
+                        // Create vertical streets
+                        if (x % 2 === 0) {
+                            createRoad(
+                                x * (blockSize + streetWidth),
+                                z * (blockSize + streetWidth),
+                                blockSize,
+                                streetWidth,
+                                false
+                            );
+                        }
+                    }
+                }
+                debug("City created");
+            }
+
+            // Create a building block
+            function createBuilding(x, z, size) {
+                // Random height between 10 and 40
+                const height = Math.random() * 30 + 10;
+                
+                // Base building
+                const buildingGeometry = new THREE.BoxGeometry(size, height, size);
+                const building = new THREE.Mesh(buildingGeometry, buildingMaterial);
+                building.position.set(x, height/2, z);
+                building.castShadow = true;
+                building.receiveShadow = true;
+                scene.add(building);
+            }
+
+            // Create road
+            function createRoad(x, z, width, length, isHorizontal) {
+                const roadGeometry = new THREE.PlaneGeometry(width, length);
+                const road = new THREE.Mesh(roadGeometry, roadMaterial);
+                road.rotation.x = -Math.PI / 2;
+                
+                if (isHorizontal) {
+                    road.position.set(x, 0, z);
+                } else {
+                    road.rotation.z = Math.PI / 2;
+                    road.position.set(x, 0, z);
+                }
+                
+                road.receiveShadow = true;
+                scene.add(road);
+            }
+
+            // Create player car
+            function createPlayerCar() {
+                debug("Creating player car...");
+                
+                // Car body
+                const bodyGeometry = new THREE.BoxGeometry(4, 1.5, 2);
+                const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+                const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                body.position.set(0, 0.75, 0);
+                body.castShadow = true;
+                body.receiveShadow = true;
+                
+                // Car top
+                const topGeometry = new THREE.BoxGeometry(2, 1, 1.8);
+                const top = new THREE.Mesh(topGeometry, bodyMaterial);
+                top.position.set(-0.5, 1.75, 0);
+                top.castShadow = true;
+                top.receiveShadow = true;
+                
+                // Wheels
+                const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 8);
+                const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+                
+                // Wheel positions
+                const wheelPositions = [
+                    { x: 1.2, y: 0.4, z: -1 },  // Front left
+                    { x: 1.2, y: 0.4, z: 1 },   // Front right
+                    { x: -1.2, y: 0.4, z: -1 }, // Back left
+                    { x: -1.2, y: 0.4, z: 1 }   // Back right
+                ];
+                
+                // Create wheels
+                const wheels = [];
+                wheelPositions.forEach(pos => {
+                    const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                    wheel.position.set(pos.x, pos.y, pos.z);
+                    wheel.rotation.z = Math.PI / 2;
+                    wheel.castShadow = true;
+                    wheel.receiveShadow = true;
+                    wheels.push(wheel);
+                });
+                
+                // Group all car parts
+                car = new THREE.Group();
+                car.add(body);
+                car.add(top);
+                wheels.forEach(wheel => car.add(wheel));
+                
+                // Car physics properties
+                car.userData = {
+                    velocity: 0,
+                    acceleration: 0,
+                    maxSpeed: 0.8,
+                    turnSpeed: 0.03
+                };
+                
+                // Initial position
+                car.position.set(0, 0, 0);
+                scene.add(car);
+                
+                debug("Player car created");
+            }
+
+            // Movement controls for player's car
+            function setupControls() {
+                debug("Setting up controls...");
+                
+                const keys = {
+                    forward: false,
+                    back: false,
+                    left: false,
+                    right: false
+                };
+                
+                document.addEventListener('keydown', (event) => {
+                    switch(event.key) {
+                        case 'w':
+                        case 'ArrowUp':
+                            keys.forward = true;
+                            break;
+                        case 's':
+                        case 'ArrowDown':
+                            keys.back = true;
+                            break;
+                        case 'a':
+                        case 'ArrowLeft':
+                            keys.left = true;
+                            break;
+                        case 'd':
+                        case 'ArrowRight':
+                            keys.right = true;
+                            break;
+                    }
+                });
+                
+                document.addEventListener('keyup', (event) => {
+                    switch(event.key) {
+                        case 'w':
+                        case 'ArrowUp':
+                            keys.forward = false;
+                            break;
+                        case 's':
+                        case 'ArrowDown':
+                            keys.back = false;
+                            break;
+                        case 'a':
+                        case 'ArrowLeft':
+                            keys.left = false;
+                            break;
+                        case 'd':
+                        case 'ArrowRight':
+                            keys.right = false;
+                            break;
+                    }
+                });
+                
+                // Handle controls
+                function handleControls() {
+                    if (!car) return;
+                    
+                    // Acceleration
+                    if (keys.forward) {
+                        car.userData.acceleration = 0.01;
+                    } else if (keys.back) {
+                        car.userData.acceleration = -0.01;
+                    } else {
+                        car.userData.acceleration = 0;
+                        // Apply drag
+                        car.userData.velocity *= 0.95;
+                    }
+                    
+                    // Update velocity
+                    car.userData.velocity += car.userData.acceleration;
+                    
+                    // Clamp to max speed
+                    if (car.userData.velocity > car.userData.maxSpeed) {
+                        car.userData.velocity = car.userData.maxSpeed;
+                    } else if (car.userData.velocity < -car.userData.maxSpeed) {
+                        car.userData.velocity = -car.userData.maxSpeed;
+                    }
+                    
+                    // Apply velocity
+                    car.position.x += Math.sin(car.rotation.y) * car.userData.velocity;
+                    car.position.z += Math.cos(car.rotation.y) * car.userData.velocity;
+                    
+                    // Turning (only when moving)
+                    if (Math.abs(car.userData.velocity) > 0.01) {
+                        if (keys.left) {
+                            car.rotation.y += car.userData.turnSpeed * (car.userData.velocity > 0 ? 1 : -1);
+                        }
+                        if (keys.right) {
+                            car.rotation.y -= car.userData.turnSpeed * (car.userData.velocity > 0 ? 1 : -1);
+                        }
+                    }
+                    
+                    // Update camera position
+                    updateCamera();
+                }
+                
+                debug("Controls setup complete");
+                return handleControls;
+            }
+
+            // Update camera position to follow car
+            function updateCamera() {
+                if (!car) return;
+                
+                if (thirdPersonCamera) {
+                    // Third person camera
+                    const cameraOffset = new THREE.Vector3(
+                        -Math.sin(car.rotation.y) * 10,
+                        5,
+                        -Math.cos(car.rotation.y) * 10
+                    );
+                    
+                    camera.position.copy(car.position).add(cameraOffset);
+                    camera.lookAt(car.position);
+                } else {
+                    // First person camera
+                    const cameraOffset = new THREE.Vector3(
+                        Math.sin(car.rotation.y) * 0.5,
+                        2,
+                        Math.cos(car.rotation.y) * 0.5
+                    );
+                    
+                    camera.position.copy(car.position).add(cameraOffset);
+                    
+                    const lookOffset = new THREE.Vector3(
+                        Math.sin(car.rotation.y) * 10,
+                        2,
+                        Math.cos(car.rotation.y) * 10
+                    );
+                    
+                    camera.lookAt(car.position.clone().add(lookOffset));
+                }
+            }
+
+            // Window resize handler
+            function handleWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+
+            // Set up UI controls
+            function setupUIControls() {
+                debug("Setting up UI controls...");
+                
+                // Day/night toggle
+                document.getElementById('day-night-toggle').addEventListener('click', function() {
+                    dayTime = !dayTime;
+                    setupLighting(dayTime);
+                });
+                
+                // Camera view toggle
+                document.getElementById('camera-toggle').addEventListener('click', function() {
+                    thirdPersonCamera = !thirdPersonCamera;
+                    updateCamera();
+                });
+                
+                debug("UI controls setup complete");
+            }
+
+            // Initialize the scene
+            function init() {
+                debug("Initializing scene...");
+                
+                // Set up scene
+                createGround();
+                createCity();
+                createPlayerCar();
+                
+                // Set up controls
+                const handleControls = setupControls();
+                setupUIControls();
+                
+                // Set up camera and lighting
+                setupLighting(dayTime);
+                camera.position.set(0, 20, 50);
+                camera.lookAt(0, 0, 0);
+                
+                // Handle window resize
+                window.addEventListener('resize', handleWindowResize);
+                
+                // Animation loop
+                function animate() {
+                    requestAnimationFrame(animate);
+                    
+                    // Handle player controls
+                    handleControls();
+                    
+                    // Render
+                    renderer.render(scene, camera);
+                }
+                
+                debug("Starting animation loop");
+                animate();
+                debug("Initialization complete");
+            }
+
+            // Start everything
+            init();
+
+        } catch (error) {
+            debug("ERROR: " + error.message);
+            console.error(error);
+        }
+    </script>
+</body>
+</html>
