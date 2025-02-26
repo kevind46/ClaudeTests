@@ -55,6 +55,7 @@ class State(Enum):
     DRAWING_PATH = 3
     ADDING_SCREEN = 4
     PLAYING = 5
+    ASSIGN_DEFENDER = 6
 
 # Player types
 class PlayerType(Enum):
@@ -106,6 +107,9 @@ class Player:
         self.speed = 2
         self.original_x = x
         self.original_y = y
+        self.marked_player = None  # For defense, who they're guarding
+        self.is_screened = False
+        self.screen_timer = 0
         
     def draw(self, surface):
         pygame.draw.circle(surface, self.color, (int(self.x), int(self.y)), PLAYER_RADIUS)
@@ -115,6 +119,11 @@ class Player:
         text_surf = font.render(str(self.number), True, BLACK)
         text_rect = text_surf.get_rect(center=(int(self.x), int(self.y)))
         surface.blit(text_surf, text_rect)
+        
+        # Draw line to marked player if defense
+        if self.marked_player and self.type == PlayerType.DEFENSE:
+            pygame.draw.line(surface, GRAY, (int(self.x), int(self.y)), 
+                            (int(self.marked_player.x), int(self.marked_player.y)), 1)
         
     def draw_path(self, surface):
         if len(self.path) < 2:
@@ -129,10 +138,68 @@ class Player:
             
     def reset(self):
         self.x = self.original_x
-        self.original_y = self.original_y
+        self.y = self.original_y
         self.current_path_index = 0
+        self.is_screened = False
+        self.screen_timer = 0
         
     def move_along_path(self):
+        # If defensive player and assigned to guard someone
+        if self.type == PlayerType.DEFENSE and self.marked_player:
+            # If screened, move slower and try to get around screen
+            if self.is_screened:
+                self.screen_timer += 1
+                # Only screened for a certain time
+                if self.screen_timer > 60:  # 1 second at 60fps
+                    self.is_screened = False
+                    self.screen_timer = 0
+                    self.speed = 2
+                else:
+                    self.speed = 0.5
+                    
+            # If offensive player has a path, follow them
+            if len(self.path) > 0:
+                # Continue on own path
+                if self.current_path_index < len(self.path) - 1:
+                    target_x, target_y = self.path[self.current_path_index + 1]
+                    
+                    dx = target_x - self.x
+                    dy = target_y - self.y
+                    distance = math.sqrt(dx * dx + dy * dy)
+                    
+                    if distance < self.speed:
+                        self.x = target_x
+                        self.y = target_y
+                        self.current_path_index += 1
+                    else:
+                        self.x += (dx / distance) * self.speed
+                        self.y += (dy / distance) * self.speed
+                    
+                    return True
+                else:
+                    # Follow offensive player if reached end of path
+                    dx = self.marked_player.x - self.x
+                    dy = self.marked_player.y - self.y
+                    distance = math.sqrt(dx * dx + dy * dy)
+                    
+                    if distance > PLAYER_RADIUS * 2:
+                        self.x += (dx / distance) * self.speed
+                        self.y += (dy / distance) * self.speed
+                    
+                    return True
+            else:
+                # No path, just follow offensive player
+                dx = self.marked_player.x - self.x
+                dy = self.marked_player.y - self.y
+                distance = math.sqrt(dx * dx + dy * dy)
+                
+                if distance > PLAYER_RADIUS * 2:
+                    self.x += (dx / distance) * self.speed
+                    self.y += (dy / distance) * self.speed
+                
+                return True
+        
+        # For offensive players or unassigned defense, follow their path
         if not self.path or self.current_path_index >= len(self.path) - 1:
             return False
             
@@ -176,6 +243,7 @@ class BasketballPlayDesigner:
         self.offense_count = 0
         self.defense_count = 0
         self.active_screens = []
+        self.pending_defender = None
         
         # Create buttons
         button_x = COURT_X
@@ -186,7 +254,8 @@ class BasketballPlayDesigner:
             Button(button_x + 3 * (BUTTON_WIDTH + BUTTON_MARGIN), BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT, "Add Screen", YELLOW, LIGHT_GRAY),
             Button(button_x + 4 * (BUTTON_WIDTH + BUTTON_MARGIN), BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT, "Play", ORANGE, LIGHT_GRAY),
             Button(button_x, BUTTON_Y + BUTTON_HEIGHT + BUTTON_MARGIN, BUTTON_WIDTH, BUTTON_HEIGHT, "Reset", GRAY, LIGHT_GRAY),
-            Button(button_x + BUTTON_WIDTH + BUTTON_MARGIN, BUTTON_Y + BUTTON_HEIGHT + BUTTON_MARGIN, BUTTON_WIDTH, BUTTON_HEIGHT, "Replay", ORANGE, LIGHT_GRAY)
+            Button(button_x + BUTTON_WIDTH + BUTTON_MARGIN, BUTTON_Y + BUTTON_HEIGHT + BUTTON_MARGIN, BUTTON_WIDTH, BUTTON_HEIGHT, "Replay", ORANGE, LIGHT_GRAY),
+            Button(button_x + 2 * (BUTTON_WIDTH + BUTTON_MARGIN), BUTTON_Y + BUTTON_HEIGHT + BUTTON_MARGIN, BUTTON_WIDTH, BUTTON_HEIGHT, "Assign Defender", RED, LIGHT_GRAY)
         ]
         
     def draw_court(self, surface):
@@ -261,6 +330,11 @@ class BasketballPlayDesigner:
             instruction = "Click on the path to add screen point, right-click to finish"
         elif self.state == State.PLAYING:
             instruction = "Playing animation..."
+        elif self.state == State.ASSIGN_DEFENDER:
+            if not self.pending_defender:
+                instruction = "Select a defensive player first"
+            else:
+                instruction = f"Select offensive player for defender #{self.pending_defender.number} to guard"
             
         text_surf = font.render(instruction, True, BLACK)
         text_rect = text_surf.get_rect(center=(WIDTH // 2, 30))
@@ -300,9 +374,7 @@ class BasketballPlayDesigner:
                 elif i == 4:  # Play
                     if self.state != State.PLAYING:
                         for player in self.players:
-                            player.x = player.original_x
-                            player.y = player.original_y
-                            player.current_path_index = 0
+                            player.reset()
                         self.state = State.PLAYING
                         self.active_screens = []
                 elif i == 5:  # Reset
@@ -310,11 +382,13 @@ class BasketballPlayDesigner:
                 elif i == 6:  # Replay
                     if self.state == State.PLAYING or any(player.path for player in self.players):
                         for player in self.players:
-                            player.x = player.original_x
-                            player.y = player.original_y
-                            player.current_path_index = 0
+                            player.reset()
                         self.state = State.PLAYING
                         self.active_screens = []
+                elif i == 7:  # Assign Defender
+                    if self.state != State.PLAYING:
+                        self.state = State.ASSIGN_DEFENDER
+                        self.pending_defender = None
                 break
                 
     def handle_mouse_events(self, pos, event):
@@ -372,9 +446,27 @@ class BasketballPlayDesigner:
                             
                             if closest_point:
                                 self.selected_player.screen_points.append(closest_point)
+                    
+                    elif self.state == State.ASSIGN_DEFENDER:
+                        for player in self.players:
+                            distance = math.sqrt((player.x - pos[0])**2 + (player.y - pos[1])**2)
+                            if distance <= PLAYER_RADIUS:
+                                if player.type == PlayerType.DEFENSE and not self.pending_defender:
+                                    self.pending_defender = player
+                                    break
+                                elif player.type == PlayerType.OFFENSE and self.pending_defender:
+                                    self.pending_defender.marked_player = player
+                                    # Set same number for easier reference
+                                    self.pending_defender.number = player.number
+                                    self.pending_defender = None
+                                    self.state = State.IDLE
+                                    break
                 
                 elif event.button == 3:  # Right click
                     if self.state == State.DRAWING_PATH or self.state == State.ADDING_SCREEN:
+                        self.state = State.IDLE
+                    elif self.state == State.ASSIGN_DEFENDER:
+                        self.pending_defender = None
                         self.state = State.IDLE
         
     def update_game(self):
@@ -398,12 +490,11 @@ class BasketballPlayDesigner:
                     # Handle collision with screens for defensive players
                     if player.type == PlayerType.DEFENSE:
                         for screen_pos in self.active_screens:
-                            if player.is_colliding_with_screen(screen_pos, None):
+                            if player.is_colliding_with_screen(screen_pos, None) and not player.is_screened:
                                 # Defensive player gets "stuck" at screen
+                                player.is_screened = True
                                 player.speed = 0.5  # Slow down when hitting screen
                                 screen_active = True
-                            else:
-                                player.speed = 2  # Normal speed
             
             if all_done and not screen_active:
                 self.state = State.IDLE
