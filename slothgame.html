@@ -718,46 +718,49 @@
                 rightJoint.position.set(0, -slothSize * 0.5, 0);
                 rightArm.add(rightJoint);
                 
-                // Add large, sharp claws to arms
-                const clawGeometry = new THREE.ConeGeometry(slothSize * 0.12, slothSize * 0.5, 3);
+                // Simplified claw implementation with just 3 clean claws per hand
+                const clawGeometry = new THREE.ConeGeometry(slothSize * 0.1, slothSize * 0.4, 3);
                 const clawMaterial = new THREE.MeshStandardMaterial({ 
                     color: 0xF0E68C, // Khaki color
                     roughness: 0.3,
                     metalness: 0.6
                 });
                 
-                // Left arm claws
-                for (let c = -1; c <= 1; c++) {
-                    const leftClaw = new THREE.Mesh(clawGeometry, clawMaterial);
-                    leftClaw.rotation.x = -Math.PI / 2 + Math.random() * 0.2 - 0.1; // Slightly random angle
-                    leftClaw.position.set(slothSize * 0.15 * c, -slothSize * 1.15, 0);
-                    leftArm.add(leftClaw);
-                    
-                    // Add extra claw for more menacing look
-                    if (c === 0) {
-                        const extraClaw = leftClaw.clone();
-                        extraClaw.scale.set(0.8, 1.2, 0.8);
-                        extraClaw.rotation.z = Math.PI / 6;
-                        extraClaw.position.set(slothSize * 0.22, -slothSize * 1.1, slothSize * 0.1);
-                        leftArm.add(extraClaw);
-                    }
+                // Create a "hand" object to hold the claws at the end of each arm
+                const leftHand = new THREE.Object3D();
+                leftHand.position.set(0, -slothSize * 1.2, 0);
+                leftArm.add(leftHand);
+                
+                const rightHand = new THREE.Object3D();
+                rightHand.position.set(0, -slothSize * 1.2, 0);
+                rightArm.add(rightHand);
+                
+                // Add three claws to left hand in a clear arrangement
+                const leftClawPositions = [
+                    { x: -slothSize * 0.15, angle: -0.2 },
+                    { x: 0, angle: 0 },
+                    { x: slothSize * 0.15, angle: 0.2 }
+                ];
+                
+                for (const pos of leftClawPositions) {
+                    const claw = new THREE.Mesh(clawGeometry, clawMaterial);
+                    claw.rotation.x = -Math.PI / 2 + pos.angle;
+                    claw.position.set(pos.x, 0, 0);
+                    leftHand.add(claw);
                 }
                 
-                // Right arm claws
-                for (let c = -1; c <= 1; c++) {
-                    const rightClaw = new THREE.Mesh(clawGeometry, clawMaterial);
-                    rightClaw.rotation.x = -Math.PI / 2 + Math.random() * 0.2 - 0.1;
-                    rightClaw.position.set(slothSize * 0.15 * c, -slothSize * 1.15, 0);
-                    rightArm.add(rightClaw);
-                    
-                    // Add extra claw
-                    if (c === 0) {
-                        const extraClaw = rightClaw.clone();
-                        extraClaw.scale.set(0.8, 1.2, 0.8);
-                        extraClaw.rotation.z = -Math.PI / 6;
-                        extraClaw.position.set(-slothSize * 0.22, -slothSize * 1.1, slothSize * 0.1);
-                        rightArm.add(extraClaw);
-                    }
+                // Add three claws to right hand in a clear arrangement
+                const rightClawPositions = [
+                    { x: -slothSize * 0.15, angle: -0.2 },
+                    { x: 0, angle: 0 },
+                    { x: slothSize * 0.15, angle: 0.2 }
+                ];
+                
+                for (const pos of rightClawPositions) {
+                    const claw = new THREE.Mesh(clawGeometry, clawMaterial);
+                    claw.rotation.x = -Math.PI / 2 + pos.angle;
+                    claw.position.set(pos.x, 0, 0);
+                    rightHand.add(claw);
                 }
                 
                 // Add legs
@@ -772,14 +775,24 @@
                 rightLeg.position.set(-slothSize * 0.3, -slothSize * 1.2, 0);
                 sloth.add(rightLeg);
                 
-                // Add foot claws
-                for (let foot of [leftLeg, rightLeg]) {
-                    for (let i = -1; i <= 1; i++) {
-                        const footClaw = new THREE.Mesh(clawGeometry, clawMaterial);
-                        footClaw.scale.set(0.7, 0.7, 0.7);
-                        footClaw.rotation.x = Math.PI;
-                        footClaw.position.set(slothSize * 0.1 * i, -slothSize * 0.6, slothSize * 0.1);
-                        foot.add(footClaw);
+                // Simplified foot claws - just three per foot
+                for (const foot of [leftLeg, rightLeg]) {
+                    const footHand = new THREE.Object3D();
+                    footHand.position.set(0, -slothSize * 0.6, 0);
+                    foot.add(footHand);
+                    
+                    const footClawPositions = [
+                        { x: -slothSize * 0.1, z: slothSize * 0.1 },
+                        { x: 0, z: slothSize * 0.15 },
+                        { x: slothSize * 0.1, z: slothSize * 0.1 }
+                    ];
+                    
+                    for (const pos of footClawPositions) {
+                        const claw = new THREE.Mesh(clawGeometry.clone(), clawMaterial);
+                        claw.scale.set(0.7, 0.7, 0.7);
+                        claw.rotation.x = Math.PI;
+                        claw.position.copy(new THREE.Vector3(pos.x, 0, pos.z));
+                        footHand.add(claw);
                     }
                 }
                 
