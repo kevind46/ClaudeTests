@@ -15,6 +15,7 @@
             position: absolute;
             width: 100%;
             height: 100%;
+            cursor: crosshair;
         }
         #gameOverScreen {
             display: none;
@@ -53,19 +54,40 @@
             font-size: 14px;
             pointer-events: none;
         }
+        #instructions {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            font-size: 24px;
+            text-align: center;
+            cursor: pointer;
+            z-index: 10;
+        }
     </style>
 </head>
 <body>
     <div id="gameContainer"></div>
     <div id="infoText">
-        W/A/S/D: Move<br>
-        Right-click drag: Look around<br>
+        W: Move forward<br>
+        A: Move left<br>
+        S: Move backward<br>
+        D: Move right<br>
+        Mouse: Look around<br>
         Escape the growing sloths!
     </div>
     <div id="gameOverScreen">
         <h2>GAME OVER</h2>
         <p>You were caught by a sloth!</p>
         <button id="playAgainBtn">Play Again</button>
+    </div>
+    <div id="instructions">
+        Click to play<br>
+        Use W,A,S,D to move and mouse to look around
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -91,15 +113,24 @@
         let prevTime = performance.now();
         
         // Camera control variables
-        let cameraRotation = {
-            x: 0,
-            y: 0
-        };
-        let isDragging = false;
-        let previousMousePosition = {
-            x: 0,
-            y: 0
-        };
+        let isPointerLocked = false;
+        
+        // Pointer lock change handler
+        function pointerLockChange() {
+            if (document.pointerLockElement === document.getElementById('gameContainer') ||
+                document.mozPointerLockElement === document.getElementById('gameContainer') ||
+                document.webkitPointerLockElement === document.getElementById('gameContainer')) {
+                // Pointer is locked
+                isPointerLocked = true;
+                document.getElementById('instructions').style.display = 'none';
+            } else {
+                // Pointer is unlocked
+                isPointerLocked = false;
+                if (!gameOver) {
+                    document.getElementById('instructions').style.display = 'flex';
+                }
+            }
+        }
         
         init();
         animate();
@@ -160,10 +191,33 @@
             window.addEventListener('resize', onWindowResize);
             document.addEventListener('keydown', onKeyDown);
             document.addEventListener('keyup', onKeyUp);
-            document.addEventListener('mousedown', onMouseDown);
-            document.addEventListener('mouseup', onMouseUp);
             document.addEventListener('mousemove', onMouseMove);
             document.getElementById('playAgainBtn').addEventListener('click', resetGame);
+            
+            // Set up pointer lock
+            const gameContainer = document.getElementById('gameContainer');
+            document.getElementById('instructions').addEventListener('click', () => {
+                lockPointer();
+            });
+            
+            gameContainer.addEventListener('click', () => {
+                if (!isPointerLocked) {
+                    lockPointer();
+                }
+            });
+            
+            // Handle pointer lock change
+            document.addEventListener('pointerlockchange', pointerLockChange, false);
+            document.addEventListener('mozpointerlockchange', pointerLockChange, false);
+            document.addEventListener('webkitpointerlockchange', pointerLockChange, false);
+        }
+        
+        function lockPointer() {
+            const gameContainer = document.getElementById('gameContainer');
+            gameContainer.requestPointerLock = gameContainer.requestPointerLock || 
+                                          gameContainer.mozRequestPointerLock ||
+                                          gameContainer.webkitRequestPointerLock;
+            gameContainer.requestPointerLock();
         }
         
         function createWalls() {
@@ -252,7 +306,7 @@
         }
         
         function createCafeteriaObjects() {
-            // Create tables in a more asymmetric pattern
+                            // Create tables in a more asymmetric pattern
             const tablePositions = [
                 // Left side cluster
                 {x: -15, z: -10},
@@ -269,6 +323,7 @@
                 {x: 12, z: -2},
                 {x: 13, z: 10},
                 {x: 8, z: 12},
+                // Make sure there's no table at spawn point (0, 15)
             ];
             
             for (const pos of tablePositions) {
@@ -408,35 +463,6 @@
             objects.push(backBench);
         }
         
-        function createTrashCan(x, z) {
-            const trashCanGeometry = new THREE.CylinderGeometry(0.7, 0.5, 1.5, 8);
-            const trashCanMaterial = new THREE.MeshStandardMaterial({ color: 0x2E8B57 });
-            const trashCan = new THREE.Mesh(trashCanGeometry, trashCanMaterial);
-            trashCan.position.set(x, 0.75, z);
-            trashCan.castShadow = true;
-            trashCan.receiveShadow = true;
-            scene.add(trashCan);
-            objects.push(trashCan);
-        }
-        
-        function createPlayer() {
-            // Player body
-            const playerGeometry = new THREE.CylinderGeometry(0.3, 0.3, playerHeight, 32);
-            const playerMaterial = new THREE.MeshStandardMaterial({ color: 0x1E90FF });
-            player = new THREE.Mesh(playerGeometry, playerMaterial);
-            player.position.set(-5, playerHeight / 2, 5);
-            player.castShadow = true;
-            player.receiveShadow = true;
-            scene.add(player);
-            
-            // Player collision box (slightly smaller than visual model)
-            player.collisionRadius = 0.25;
-            
-            // Set initial camera position to player
-            camera.position.copy(player.position);
-            camera.position.y = playerHeight;
-        }
-        
         function createChair(x, z) {
             // Chair seat
             const seatGeometry = new THREE.BoxGeometry(0.8, 0.1, 0.8);
@@ -478,11 +504,40 @@
             }
         }
         
+        function createTrashCan(x, z) {
+            const trashCanGeometry = new THREE.CylinderGeometry(0.7, 0.5, 1.5, 8);
+            const trashCanMaterial = new THREE.MeshStandardMaterial({ color: 0x2E8B57 });
+            const trashCan = new THREE.Mesh(trashCanGeometry, trashCanMaterial);
+            trashCan.position.set(x, 0.75, z);
+            trashCan.castShadow = true;
+            trashCan.receiveShadow = true;
+            scene.add(trashCan);
+            objects.push(trashCan);
+        }
+        
+        function createPlayer() {
+            // Player body
+            const playerGeometry = new THREE.CylinderGeometry(0.3, 0.3, playerHeight, 32);
+            const playerMaterial = new THREE.MeshStandardMaterial({ color: 0x1E90FF });
+            player = new THREE.Mesh(playerGeometry, playerMaterial);
+            player.position.set(0, playerHeight / 2, 15); // Spawn in a clear area near the south wall
+            player.castShadow = true;
+            player.receiveShadow = true;
+            scene.add(player);
+            
+            // Player collision box (much smaller than visual model)
+            player.collisionRadius = 0.2;
+            
+            // Set initial camera position to player
+            camera.position.copy(player.position);
+            camera.position.y = playerHeight;
+        }
+        
         function createSloths() {
             const slothPositions = [
-                {x: 15, z: 15},
-                {x: -15, z: 15},
-                {x: 0, z: -15}
+                {x: 15, z: -15},
+                {x: -15, z: -15},
+                {x: -15, z: 15}
             ];
             
             const slothColors = [
@@ -618,7 +673,7 @@
         }
         
         function onKeyDown(event) {
-            keys[event.code] = true;
+            if (gameOver) return;
             
             switch (event.code) {
                 case 'KeyW':
@@ -637,7 +692,7 @@
         }
         
         function onKeyUp(event) {
-            keys[event.code] = false;
+            if (gameOver) return;
             
             switch (event.code) {
                 case 'KeyW':
@@ -655,46 +710,22 @@
             }
         }
         
-        function onMouseDown(event) {
-            if (event.button === 2) { // Right mouse button
-                event.preventDefault();
-                isDragging = true;
-                previousMousePosition = {
-                    x: event.clientX,
-                    y: event.clientY
-                };
-            }
-        }
-        
-        function onMouseUp(event) {
-            if (event.button === 2) { // Right mouse button
-                isDragging = false;
-            }
-        }
-        
         function onMouseMove(event) {
-            if (isDragging) {
-                const deltaMove = {
-                    x: event.clientX - previousMousePosition.x,
-                    y: event.clientY - previousMousePosition.y
-                };
-                
-                // Apply rotation
-                cameraRotation.y -= deltaMove.x * 0.003;
-                cameraRotation.x -= deltaMove.y * 0.003;
-                
-                // Limit vertical rotation
-                cameraRotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, cameraRotation.x));
-                
-                previousMousePosition = {
-                    x: event.clientX,
-                    y: event.clientY
-                };
-            }
+            if (!isPointerLocked || gameOver) return;
+            
+            const movementX = event.movementX || event.mozMovementX || event.webkitMovementX || 0;
+            const movementY = event.movementY || event.mozMovementY || event.webkitMovementY || 0;
+            
+            // Update camera rotation
+            camera.rotation.y -= movementX * 0.002;
+            camera.rotation.x -= movementY * 0.002;
+            
+            // Limit vertical rotation
+            camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
         }
         
         function updatePlayerPosition(delta) {
-            if (gameOver) return;
+            if (gameOver || !isPointerLocked) return;
             
             const speed = 5.0;
             
@@ -705,8 +736,15 @@
             
             // Apply camera rotation to movement direction
             const rotatedDirection = new THREE.Vector3();
-            rotatedDirection.x = direction.x * Math.cos(cameraRotation.y) + direction.z * Math.sin(cameraRotation.y);
-            rotatedDirection.z = -direction.x * Math.sin(cameraRotation.y) + direction.z * Math.cos(cameraRotation.y);
+            const cameraDirection = new THREE.Vector3();
+            camera.getWorldDirection(cameraDirection);
+            
+            // Create a rotation matrix from camera direction
+            const cameraEuler = new THREE.Euler(0, Math.atan2(-cameraDirection.x, -cameraDirection.z), 0);
+            const cameraRotationMatrix = new THREE.Matrix4().makeRotationFromEuler(cameraEuler);
+            
+            // Apply rotation to movement direction
+            rotatedDirection.copy(direction).applyMatrix4(cameraRotationMatrix);
             
             // Update velocity
             if (moveForward || moveBackward) playerVelocity.z = -rotatedDirection.z * speed * delta;
@@ -714,6 +752,9 @@
             
             if (moveLeft || moveRight) playerVelocity.x = -rotatedDirection.x * speed * delta;
             else playerVelocity.x = 0;
+            
+            // Store old position for collision detection
+            const oldPosition = player.position.clone();
             
             // Update player position
             player.position.x += playerVelocity.x;
@@ -725,49 +766,69 @@
             player.position.z = Math.max(-boundaryLimit, Math.min(boundaryLimit, player.position.z));
             
             // Collision detection with objects
+            let collision = false;
+            
             for (const object of objects) {
                 if (object instanceof THREE.Mesh && object !== floor) {
                     // Simple box collision detection
                     if (object.geometry.type === 'BoxGeometry') {
-                        const objectBox = new THREE.Box3().setFromObject(object);
-                        const playerRadius = player.collisionRadius;
+                        // Get object dimensions with a small buffer to make hitboxes tighter
+                        const box = new THREE.Box3().setFromObject(object);
+                        const buffer = 0.1; // Tighter buffer
+                        const objectBox = new THREE.Box3(
+                            new THREE.Vector3(box.min.x + buffer, box.min.y, box.min.z + buffer),
+                            new THREE.Vector3(box.max.x - buffer, box.max.y, box.max.z - buffer)
+                        );
                         
-                        // Check for collision on X axis
+                        // Use a smaller collision radius
+                        const playerRadius = player.collisionRadius * 0.7;
+                        
+                        // Check for collision
                         if (player.position.x + playerRadius > objectBox.min.x && 
                             player.position.x - playerRadius < objectBox.max.x &&
                             player.position.z + playerRadius > objectBox.min.z &&
                             player.position.z - playerRadius < objectBox.max.z) {
                             
-                            // Find closest face to push away from
-                            const distToMinX = Math.abs(player.position.x - objectBox.min.x);
-                            const distToMaxX = Math.abs(player.position.x - objectBox.max.x);
-                            const distToMinZ = Math.abs(player.position.z - objectBox.min.z);
-                            const distToMaxZ = Math.abs(player.position.z - objectBox.max.z);
+                            // Calculate overlap on each axis to find the smallest push needed
+                            const overlapX1 = player.position.x + playerRadius - objectBox.min.x;
+                            const overlapX2 = objectBox.max.x - (player.position.x - playerRadius);
+                            const overlapZ1 = player.position.z + playerRadius - objectBox.min.z;
+                            const overlapZ2 = objectBox.max.z - (player.position.z - playerRadius);
                             
-                            const minDist = Math.min(distToMinX, distToMaxX, distToMinZ, distToMaxZ);
+                            // Find the axis with the smallest overlap
+                            const minOverlap = Math.min(overlapX1, overlapX2, overlapZ1, overlapZ2);
                             
-                            if (minDist === distToMinX) {
-                                player.position.x = objectBox.min.x - playerRadius;
-                            } else if (minDist === distToMaxX) {
-                                player.position.x = objectBox.max.x + playerRadius;
-                            } else if (minDist === distToMinZ) {
-                                player.position.z = objectBox.min.z - playerRadius;
-                            } else if (minDist === distToMaxZ) {
-                                player.position.z = objectBox.max.z + playerRadius;
+                            // Apply the minimum push needed to resolve collision
+                            if (minOverlap === overlapX1) {
+                                player.position.x = objectBox.min.x - playerRadius - 0.01;
+                            } else if (minOverlap === overlapX2) {
+                                player.position.x = objectBox.max.x + playerRadius + 0.01;
+                            } else if (minOverlap === overlapZ1) {
+                                player.position.z = objectBox.min.z - playerRadius - 0.01;
+                            } else if (minOverlap === overlapZ2) {
+                                player.position.z = objectBox.max.z + playerRadius + 0.01;
                             }
+                            
+                            // Skip checking other objects after resolving this collision
+                            continue;
                         }
                     }
-                    // Cylinder collision detection for trash cans
+                    // Cylinder collision detection for trash cans with tighter radius
                     else if (object.geometry.type === 'CylinderGeometry') {
                         const dx = player.position.x - object.position.x;
                         const dz = player.position.z - object.position.z;
                         const distance = Math.sqrt(dx * dx + dz * dz);
-                        const minDistance = player.collisionRadius + 0.7; // 0.7 is the trash can radius
+                        // Use a smaller collision radius for both player and trash can
+                        const minDistance = player.collisionRadius * 0.7 + 0.5; // Reduced from 0.6
                         
                         if (distance < minDistance) {
+                            // Push player away from trash can
                             const angle = Math.atan2(dz, dx);
-                            player.position.x = object.position.x + Math.cos(angle) * minDistance;
-                            player.position.z = object.position.z + Math.sin(angle) * minDistance;
+                            player.position.x = object.position.x + Math.cos(angle) * (minDistance + 0.01);
+                            player.position.z = object.position.z + Math.sin(angle) * (minDistance + 0.01);
+                            
+                            // Skip checking other objects after resolving this collision
+                            continue;
                         }
                     }
                 }
@@ -776,11 +837,6 @@
             // Update camera position
             camera.position.copy(player.position);
             camera.position.y = playerHeight;
-            
-            // Update camera rotation
-            camera.rotation.order = 'YXZ';
-            camera.rotation.y = cameraRotation.y;
-            camera.rotation.x = cameraRotation.x;
         }
         
         function updateSloths(delta) {
@@ -825,6 +881,7 @@
                 if (distance < player.collisionRadius + sloth.size * 0.5) {
                     gameOver = true;
                     document.getElementById('gameOverScreen').style.display = 'block';
+                    document.exitPointerLock();
                 }
             }
         }
@@ -848,13 +905,11 @@
             document.getElementById('gameOverScreen').style.display = 'none';
             
             // Reset player position
-            player.position.set(-5, playerHeight / 2, 5);
+            player.position.set(0, playerHeight / 2, 15);
             
-            // Reset camera position and rotation
+            // Reset camera position
             camera.position.copy(player.position);
             camera.position.y = playerHeight;
-            cameraRotation.x = 0;
-            cameraRotation.y = 0;
             
             // Reset sloths
             for (const sloth of sloths) {
@@ -862,6 +917,9 @@
             }
             sloths = [];
             createSloths();
+            
+            // Re-lock the pointer if it was unlocked
+            lockPointer();
         }
         
         // Prevent context menu on right-click
