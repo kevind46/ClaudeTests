@@ -551,8 +551,12 @@
                 // Make sloths taller and lankier
                 const slothGeometry = new THREE.BoxGeometry(slothSize * 0.8, slothSize * 2.5, slothSize * 0.7);
                 
-                // Create sloth body
-                const slothMaterial = new THREE.MeshStandardMaterial({ color: slothColors[i] });
+                // Create sloth body with darker color
+                const slothMaterial = new THREE.MeshStandardMaterial({ 
+                    color: slothColors[i],
+                    roughness: 0.9, // Rough texture
+                    metalness: 0.1
+                });
                 const sloth = new THREE.Mesh(slothGeometry, slothMaterial);
                 sloth.position.set(slothPositions[i].x, slothSize * 2.5 / 2, slothPositions[i].z);
                 sloth.castShadow = true;
@@ -567,48 +571,126 @@
                 scene.add(sloth);
                 sloths.push(sloth);
                 
-                // Add head slightly above body
-                const headGeometry = new THREE.SphereGeometry(slothSize * 0.7, 16, 16);
-                const headMaterial = new THREE.MeshStandardMaterial({ color: slothColors[i] });
+                // Add head - slightly larger and more defined
+                const headGeometry = new THREE.SphereGeometry(slothSize * 0.8, 16, 16);
+                const headMaterial = new THREE.MeshStandardMaterial({ 
+                    color: slothColors[i],
+                    roughness: 0.7,
+                });
                 const head = new THREE.Mesh(headGeometry, headMaterial);
-                head.position.set(0, slothSize * 1.4, 0);
+                head.position.set(0, slothSize * 1.5, 0); // Position higher
                 sloth.add(head);
                 
-                // Add weird eyes to sloth - bigger, more spaced out and asymmetric
-                const eyeGeometry = new THREE.SphereGeometry(slothSize * 0.2, 16, 16);
-                const eyeMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFFFF });
+                // Add large, creepy eyes with glowing effect - moved to NEGATIVE Z to face player
+                const eyeSize = slothSize * 0.25;
+                const eyeGeometry = new THREE.SphereGeometry(eyeSize, 16, 16);
+                const eyeMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xFF0000, // Bright red eyes
+                    emissive: 0xFF0000,
+                    emissiveIntensity: 1.0, // Strong glow
+                    roughness: 0.1,
+                    metalness: 0.8
+                });
                 
                 const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-                leftEye.position.set(slothSize * 0.4, slothSize * 1.4, -slothSize * 0.5);
-                sloth.add(leftEye);
+                leftEye.position.set(slothSize * 0.45, slothSize * 0.3, -slothSize * 0.6);
+                head.add(leftEye);
                 
                 const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-                rightEye.scale.set(0.8, 1.2, 1);
-                rightEye.position.set(-slothSize * 0.5, slothSize * 1.5, -slothSize * 0.4);
-                sloth.add(rightEye);
+                // Make eyes asymmetrical for more creepy effect
+                rightEye.scale.set(0.9, 1.1, 1);
+                rightEye.position.set(-slothSize * 0.45, slothSize * 0.4, -slothSize * 0.6);
+                head.add(rightEye);
                 
-                // Add pupils
-                const pupilGeometry = new THREE.SphereGeometry(slothSize * 0.1, 16, 16);
-                const pupilMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 });
+                // Add snake-like pupils - vertical slits
+                const pupilGeometry = new THREE.BoxGeometry(slothSize * 0.04, slothSize * 0.2, slothSize * 0.06);
+                const pupilMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x000000,
+                    roughness: 0
+                });
                 
                 const leftPupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
-                leftPupil.position.set(0, 0, slothSize * 0.15);
+                leftPupil.position.set(0, 0, -eyeSize * 0.8);
                 leftEye.add(leftPupil);
                 
                 const rightPupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
-                rightPupil.position.set(0, 0, slothSize * 0.15);
+                rightPupil.position.set(0, 0, -eyeSize * 0.8);
                 rightEye.add(rightPupil);
                 
-                // Add weird nose to sloth
-                const noseGeometry = new THREE.ConeGeometry(slothSize * 0.2, slothSize * 0.4, 5);
-                const noseMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 });
-                const nose = new THREE.Mesh(noseGeometry, noseMaterial);
-                nose.rotation.x = Math.PI / 2;
-                nose.position.set(0, slothSize * 1.3, -slothSize * 0.7);
-                sloth.add(nose);
+                // Add gaping mouth with sharp teeth - moved to NEGATIVE Z to face player
+                const mouthGeometry = new THREE.BoxGeometry(slothSize * 0.8, slothSize * 0.3, slothSize * 0.3);
+                const mouthMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x800000, // Dark red
+                    roughness: 0.1,
+                    metalness: 0.1,
+                    emissive: 0x220000,
+                    emissiveIntensity: 0.5
+                });
+                const mouth = new THREE.Mesh(mouthGeometry, mouthMaterial);
+                mouth.position.set(0, -slothSize * 0.3, -slothSize * 0.65);
+                head.add(mouth);
                 
-                // Add super long lankier arms to sloth
-                const armGeometry = new THREE.CylinderGeometry(slothSize * 0.12, slothSize * 0.08, slothSize * 2.2, 8);
+                // Add sharp, prominent teeth
+                const teethGeometry = new THREE.ConeGeometry(slothSize * 0.08, slothSize * 0.25, 4);
+                const teethMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xF5F5DC, // Off-white
+                    roughness: 0.3,
+                    metalness: 0.1
+                });
+                
+                // Add multiple teeth in various positions - adjusted to face player
+                const teethPositions = [
+                    {x: -0.3, y: 0.12, z: 0.05, r: 0.1},
+                    {x: -0.18, y: 0.08, z: 0, r: -0.2},
+                    {x: -0.05, y: 0.15, z: 0.15, r: 0.1},
+                    {x: 0.05, y: 0.1, z: 0.05, r: -0.1},
+                    {x: 0.18, y: 0.12, z: 0, r: 0.2},
+                    {x: 0.3, y: 0.08, z: 0.1, r: -0.15}
+                ];
+                
+                for (const pos of teethPositions) {
+                    const tooth = new THREE.Mesh(teethGeometry, teethMaterial);
+                    tooth.rotation.x = Math.PI / 2 + pos.r; // Adjust rotation to face forward
+                    tooth.position.set(slothSize * pos.x, slothSize * pos.y, -slothSize * pos.z);
+                    mouth.add(tooth);
+                    
+                    // Add bottom row of teeth too
+                    const bottomTooth = tooth.clone();
+                    bottomTooth.rotation.x = -Math.PI / 2 - pos.r;
+                    bottomTooth.position.y = -slothSize * pos.y - slothSize * 0.15;
+                    mouth.add(bottomTooth);
+                }
+                
+                // Add weird bulbous nose - moved to NEGATIVE Z to face player
+                const noseGeometry = new THREE.SphereGeometry(slothSize * 0.2, 8, 8);
+                noseGeometry.scale(1, 1.2, 1.3);
+                const noseMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x000000,
+                    roughness: 0.8
+                });
+                const nose = new THREE.Mesh(noseGeometry, noseMaterial);
+                nose.position.set(0, -slothSize * 0.1, -slothSize * 0.8);
+                head.add(nose);
+                
+                // Add more prominent nostrils - adjusted to face player
+                const nostrilGeometry = new THREE.CircleGeometry(slothSize * 0.06, 8);
+                const nostrilMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x330000,
+                    side: THREE.DoubleSide,
+                    roughness: 0.1
+                });
+                
+                const leftNostril = new THREE.Mesh(nostrilGeometry, nostrilMaterial);
+                leftNostril.position.set(slothSize * 0.1, slothSize * 0.05, -slothSize * 0.1);
+                leftNostril.rotation.y = -Math.PI / 2;
+                nose.add(leftNostril);
+                
+                const rightNostril = leftNostril.clone();
+                rightNostril.position.set(-slothSize * 0.1, slothSize * 0.05, -slothSize * 0.1);
+                nose.add(rightNostril);
+                
+                // Add super long lankier arms with visible joints
+                const armGeometry = new THREE.CylinderGeometry(slothSize * 0.15, slothSize * 0.1, slothSize * 2.5, 8);
                 const armMaterial = new THREE.MeshStandardMaterial({ color: slothColors[i] });
                 
                 const leftArm = new THREE.Mesh(armGeometry, armMaterial);
@@ -621,36 +703,62 @@
                 rightArm.position.set(-slothSize * 0.6, slothSize * 0.6, 0);
                 sloth.add(rightArm);
                 
-                // Add claws to arms
-                const clawGeometry = new THREE.ConeGeometry(slothSize * 0.1, slothSize * 0.4, 3);
-                const clawMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFFFF });
+                // Add elbow joints for creepier look
+                const jointGeometry = new THREE.SphereGeometry(slothSize * 0.18, 8, 8);
+                const jointMaterial = new THREE.MeshStandardMaterial({ 
+                    color: slothColors[i],
+                    roughness: 0.9
+                });
+                
+                const leftJoint = new THREE.Mesh(jointGeometry, jointMaterial);
+                leftJoint.position.set(0, -slothSize * 0.5, 0);
+                leftArm.add(leftJoint);
+                
+                const rightJoint = leftJoint.clone();
+                rightJoint.position.set(0, -slothSize * 0.5, 0);
+                rightArm.add(rightJoint);
+                
+                // Add large, sharp claws to arms
+                const clawGeometry = new THREE.ConeGeometry(slothSize * 0.12, slothSize * 0.5, 3);
+                const clawMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xF0E68C, // Khaki color
+                    roughness: 0.3,
+                    metalness: 0.6
+                });
                 
                 // Left arm claws
-                const leftClaw1 = new THREE.Mesh(clawGeometry, clawMaterial);
-                leftClaw1.rotation.x = -Math.PI / 2;
-                leftClaw1.position.set(0, -slothSize * 1.0, 0);
-                leftArm.add(leftClaw1);
-                
-                const leftClaw2 = leftClaw1.clone();
-                leftClaw2.position.set(slothSize * 0.15, -slothSize * 1.0, 0);
-                leftArm.add(leftClaw2);
-                
-                const leftClaw3 = leftClaw1.clone();
-                leftClaw3.position.set(-slothSize * 0.15, -slothSize * 1.0, 0);
-                leftArm.add(leftClaw3);
+                for (let c = -1; c <= 1; c++) {
+                    const leftClaw = new THREE.Mesh(clawGeometry, clawMaterial);
+                    leftClaw.rotation.x = -Math.PI / 2 + Math.random() * 0.2 - 0.1; // Slightly random angle
+                    leftClaw.position.set(slothSize * 0.15 * c, -slothSize * 1.15, 0);
+                    leftArm.add(leftClaw);
+                    
+                    // Add extra claw for more menacing look
+                    if (c === 0) {
+                        const extraClaw = leftClaw.clone();
+                        extraClaw.scale.set(0.8, 1.2, 0.8);
+                        extraClaw.rotation.z = Math.PI / 6;
+                        extraClaw.position.set(slothSize * 0.22, -slothSize * 1.1, slothSize * 0.1);
+                        leftArm.add(extraClaw);
+                    }
+                }
                 
                 // Right arm claws
-                const rightClaw1 = leftClaw1.clone();
-                rightClaw1.position.set(0, -slothSize * 1.0, 0);
-                rightArm.add(rightClaw1);
-                
-                const rightClaw2 = leftClaw1.clone();
-                rightClaw2.position.set(slothSize * 0.15, -slothSize * 1.0, 0);
-                rightArm.add(rightClaw2);
-                
-                const rightClaw3 = leftClaw1.clone();
-                rightClaw3.position.set(-slothSize * 0.15, -slothSize * 1.0, 0);
-                rightArm.add(rightClaw3);
+                for (let c = -1; c <= 1; c++) {
+                    const rightClaw = new THREE.Mesh(clawGeometry, clawMaterial);
+                    rightClaw.rotation.x = -Math.PI / 2 + Math.random() * 0.2 - 0.1;
+                    rightClaw.position.set(slothSize * 0.15 * c, -slothSize * 1.15, 0);
+                    rightArm.add(rightClaw);
+                    
+                    // Add extra claw
+                    if (c === 0) {
+                        const extraClaw = rightClaw.clone();
+                        extraClaw.scale.set(0.8, 1.2, 0.8);
+                        extraClaw.rotation.z = -Math.PI / 6;
+                        extraClaw.position.set(-slothSize * 0.22, -slothSize * 1.1, slothSize * 0.1);
+                        rightArm.add(extraClaw);
+                    }
+                }
                 
                 // Add legs
                 const legGeometry = new THREE.CylinderGeometry(slothSize * 0.15, slothSize * 0.1, slothSize * 1.2, 8);
@@ -663,6 +771,32 @@
                 const rightLeg = new THREE.Mesh(legGeometry, legMaterial);
                 rightLeg.position.set(-slothSize * 0.3, -slothSize * 1.2, 0);
                 sloth.add(rightLeg);
+                
+                // Add foot claws
+                for (let foot of [leftLeg, rightLeg]) {
+                    for (let i = -1; i <= 1; i++) {
+                        const footClaw = new THREE.Mesh(clawGeometry, clawMaterial);
+                        footClaw.scale.set(0.7, 0.7, 0.7);
+                        footClaw.rotation.x = Math.PI;
+                        footClaw.position.set(slothSize * 0.1 * i, -slothSize * 0.6, slothSize * 0.1);
+                        foot.add(footClaw);
+                    }
+                }
+                
+                // Add bony spine to back for extra creepiness
+                const spineCount = 5;
+                for (let s = 0; s < spineCount; s++) {
+                    const spineGeometry = new THREE.ConeGeometry(slothSize * 0.08, slothSize * 0.3, 4);
+                    const spineMaterial = new THREE.MeshStandardMaterial({ 
+                        color: slothColors[i],
+                        roughness: 0.7
+                    });
+                    const spine = new THREE.Mesh(spineGeometry, spineMaterial);
+                    const posY = slothSize * 1.0 - s * (slothSize * 0.5);
+                    spine.rotation.x = -Math.PI / 2;
+                    spine.position.set(0, posY, slothSize * 0.3);
+                    sloth.add(spine);
+                }
             }
         }
         
@@ -846,8 +980,8 @@
                 sloth.position.x += directionToPlayer.x * speed * delta;
                 sloth.position.z += directionToPlayer.z * speed * delta;
                 
-                // Rotate sloth to face player
-                const angle = Math.atan2(directionToPlayer.x, directionToPlayer.z);
+                // Rotate sloth to face player - add PI to make it face the opposite direction (toward player)
+                const angle = Math.atan2(directionToPlayer.x, directionToPlayer.z) + Math.PI;
                 sloth.rotation.y = angle;
                 
                 // Check for collision with player
