@@ -173,10 +173,13 @@
                 metalness: 0.1
             });
             
+            // Wall height
+            const wallHeight = 8;
+            
             // North wall
-            const northWallGeometry = new THREE.BoxGeometry(40, 8, 0.5);
+            const northWallGeometry = new THREE.BoxGeometry(40, wallHeight, 0.5);
             const northWall = new THREE.Mesh(northWallGeometry, wallMaterial);
-            northWall.position.set(0, 4, -20);
+            northWall.position.set(0, wallHeight/2, -20);
             northWall.receiveShadow = true;
             northWall.castShadow = true;
             scene.add(northWall);
@@ -184,14 +187,14 @@
             
             // South wall
             const southWall = northWall.clone();
-            southWall.position.set(0, 4, 20);
+            southWall.position.set(0, wallHeight/2, 20);
             scene.add(southWall);
             objects.push(southWall);
             
             // East wall
-            const eastWallGeometry = new THREE.BoxGeometry(0.5, 8, 40);
+            const eastWallGeometry = new THREE.BoxGeometry(0.5, wallHeight, 40);
             const eastWall = new THREE.Mesh(eastWallGeometry, wallMaterial);
-            eastWall.position.set(20, 4, 0);
+            eastWall.position.set(20, wallHeight/2, 0);
             eastWall.receiveShadow = true;
             eastWall.castShadow = true;
             scene.add(eastWall);
@@ -199,50 +202,104 @@
             
             // West wall
             const westWall = eastWall.clone();
-            westWall.position.set(-20, 4, 0);
+            westWall.position.set(-20, wallHeight/2, 0);
             scene.add(westWall);
             objects.push(westWall);
+            
+            // Ceiling
+            const ceilingGeometry = new THREE.PlaneGeometry(40, 40);
+            const ceilingMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xF0F0F0,
+                side: THREE.DoubleSide
+            });
+            const ceiling = new THREE.Mesh(ceilingGeometry, ceilingMaterial);
+            ceiling.rotation.x = Math.PI / 2;
+            ceiling.position.set(0, wallHeight, 0);
+            ceiling.receiveShadow = true;
+            scene.add(ceiling);
+            
+            // Add ceiling lights
+            for (let x = -15; x <= 15; x += 10) {
+                for (let z = -15; z <= 15; z += 10) {
+                    const lightGeometry = new THREE.BoxGeometry(3, 0.2, 3);
+                    const lightMaterial = new THREE.MeshStandardMaterial({
+                        color: 0xFFFFFF,
+                        emissive: 0xFFFFFF,
+                        emissiveIntensity: 0.5
+                    });
+                    const light = new THREE.Mesh(lightGeometry, lightMaterial);
+                    light.position.set(x, wallHeight - 0.1, z);
+                    scene.add(light);
+                    
+                    // Add point light at ceiling light
+                    const pointLight = new THREE.PointLight(0xFFFFFF, 0.5, 20);
+                    pointLight.position.set(x, wallHeight - 0.3, z);
+                    scene.add(pointLight);
+                }
+            }
+            
+            // Add a door in the north wall
+            const doorWidth = 3;
+            const doorHeight = 4;
+            const doorGeometry = new THREE.BoxGeometry(doorWidth, doorHeight, 0.3);
+            const doorMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+            const door = new THREE.Mesh(doorGeometry, doorMaterial);
+            door.position.set(-10, doorHeight/2, -19.8);
+            door.receiveShadow = true;
+            door.castShadow = true;
+            scene.add(door);
+            objects.push(door);
         }
         
         function createCafeteriaObjects() {
-            // Create tables
+            // Create tables in a more asymmetric pattern
             const tablePositions = [
-                {x: -12, z: -12},
-                {x: -12, z: -6},
-                {x: -12, z: 0},
-                {x: -12, z: 6},
-                {x: -12, z: 12},
-                {x: 0, z: -12},
-                {x: 0, z: -6},
-                {x: 0, z: 0},
-                {x: 0, z: 6},
-                {x: 0, z: 12},
-                {x: 12, z: -12},
-                {x: 12, z: -6},
-                {x: 12, z: 0},
-                {x: 12, z: 6},
-                {x: 12, z: 12},
+                // Left side cluster
+                {x: -15, z: -10},
+                {x: -13, z: -5},
+                {x: -10, z: -12},
+                {x: -8, z: -7},
+                // Center area (more sparse)
+                {x: -2, z: 0},
+                {x: 3, z: -3},
+                {x: 4, z: 5},
+                {x: -5, z: 7},
+                // Right side (scattered)
+                {x: 10, z: -8},
+                {x: 12, z: -2},
+                {x: 13, z: 10},
+                {x: 8, z: 12},
             ];
             
             for (const pos of tablePositions) {
                 createTable(pos.x, pos.z);
             }
             
-            // Create serving counter
-            const counterGeometry = new THREE.BoxGeometry(38, 1.2, 3);
+            // Create serving counter (L-shaped)
+            const mainCounterGeometry = new THREE.BoxGeometry(30, 1.2, 3);
             const counterMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
-            const counter = new THREE.Mesh(counterGeometry, counterMaterial);
-            counter.position.set(0, 0.6, -16);
-            counter.castShadow = true;
-            counter.receiveShadow = true;
-            scene.add(counter);
-            objects.push(counter);
+            const mainCounter = new THREE.Mesh(mainCounterGeometry, counterMaterial);
+            mainCounter.position.set(-3, 0.6, -16);
+            mainCounter.castShadow = true;
+            mainCounter.receiveShadow = true;
+            scene.add(mainCounter);
+            objects.push(mainCounter);
+            
+            // Side counter (L shape extension)
+            const sideCounterGeometry = new THREE.BoxGeometry(3, 1.2, 10);
+            const sideCounter = new THREE.Mesh(sideCounterGeometry, counterMaterial);
+            sideCounter.position.set(13, 0.6, -11);
+            sideCounter.castShadow = true;
+            sideCounter.receiveShadow = true;
+            scene.add(sideCounter);
+            objects.push(sideCounter);
             
             // Create food display on counter
-            for (let i = -17; i <= 17; i += 4) {
-                const foodDisplayGeometry = new THREE.BoxGeometry(3, 0.5, 2);
+            const foodTypes = [0xFFD700, 0x228B22, 0xDC143C, 0xFFA500, 0x8B0000, 0xFFFFE0];
+            for (let i = -15; i <= 10; i += 5) {
+                const foodDisplayGeometry = new THREE.BoxGeometry(3, 0.8, 2);
                 const foodDisplayMaterial = new THREE.MeshStandardMaterial({ 
-                    color: Math.random() * 0xffffff 
+                    color: foodTypes[Math.floor(Math.random() * foodTypes.length)]
                 });
                 const foodDisplay = new THREE.Mesh(foodDisplayGeometry, foodDisplayMaterial);
                 foodDisplay.position.set(i, 1.45, -16);
@@ -252,11 +309,55 @@
                 objects.push(foodDisplay);
             }
             
+            // Add a drink machine
+            const machineGeometry = new THREE.BoxGeometry(2, 4, 1.5);
+            const machineMaterial = new THREE.MeshStandardMaterial({ color: 0x708090 });
+            const drinkMachine = new THREE.Mesh(machineGeometry, machineMaterial);
+            drinkMachine.position.set(13, 2, -16);
+            drinkMachine.castShadow = true;
+            drinkMachine.receiveShadow = true;
+            scene.add(drinkMachine);
+            objects.push(drinkMachine);
+            
+            // Add a salad bar in the middle
+            const saladBarGeometry = new THREE.BoxGeometry(8, 1.5, 4);
+            const saladBarMaterial = new THREE.MeshStandardMaterial({ color: 0x32CD32 });
+            const saladBar = new THREE.Mesh(saladBarGeometry, saladBarMaterial);
+            saladBar.position.set(-7, 0.75, 0);
+            saladBar.castShadow = true;
+            saladBar.receiveShadow = true;
+            scene.add(saladBar);
+            objects.push(saladBar);
+            
+            // Add a check-out register
+            const registerGeometry = new THREE.BoxGeometry(2, 1, 2);
+            const registerMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 });
+            const register = new THREE.Mesh(registerGeometry, registerMaterial);
+            register.position.set(13, 1.2, -5);
+            register.castShadow = true;
+            register.receiveShadow = true;
+            scene.add(register);
+            objects.push(register);
+            
+            // Create random chairs (not attached to tables)
+            const chairPositions = [
+                {x: -17, z: 5},
+                {x: 6, z: -12},
+                {x: 16, z: 5},
+                {x: -3, z: 13},
+                {x: 0, z: -15}
+            ];
+            
+            for (const pos of chairPositions) {
+                createChair(pos.x, pos.z);
+            }
+            
             // Create trash cans
             createTrashCan(-18, 18);
             createTrashCan(18, 18);
             createTrashCan(18, -18);
             createTrashCan(-18, -18);
+            createTrashCan(0, 18);
         }
         
         function createTable(x, z) {
@@ -336,6 +437,47 @@
             camera.position.y = playerHeight;
         }
         
+        function createChair(x, z) {
+            // Chair seat
+            const seatGeometry = new THREE.BoxGeometry(0.8, 0.1, 0.8);
+            const chairMaterial = new THREE.MeshStandardMaterial({ color: 0x8B0000 });
+            const seat = new THREE.Mesh(seatGeometry, chairMaterial);
+            seat.position.set(x, 0.5, z);
+            seat.castShadow = true;
+            seat.receiveShadow = true;
+            scene.add(seat);
+            objects.push(seat);
+            
+            // Chair back
+            const backGeometry = new THREE.BoxGeometry(0.8, 1, 0.1);
+            const back = new THREE.Mesh(backGeometry, chairMaterial);
+            back.position.set(x, 1.05, z + 0.35);
+            back.castShadow = true;
+            back.receiveShadow = true;
+            scene.add(back);
+            objects.push(back);
+            
+            // Chair legs
+            const legGeometry = new THREE.CylinderGeometry(0.05, 0.05, 0.5, 8);
+            const legMaterial = new THREE.MeshStandardMaterial({ color: 0x696969 });
+            
+            const positions = [
+                {x: x - 0.3, z: z - 0.3},
+                {x: x - 0.3, z: z + 0.3},
+                {x: x + 0.3, z: z - 0.3},
+                {x: x + 0.3, z: z + 0.3}
+            ];
+            
+            for (const pos of positions) {
+                const leg = new THREE.Mesh(legGeometry, legMaterial);
+                leg.position.set(pos.x, 0.25, pos.z);
+                leg.castShadow = true;
+                leg.receiveShadow = true;
+                scene.add(leg);
+                objects.push(leg);
+            }
+        }
+        
         function createSloths() {
             const slothPositions = [
                 {x: 15, z: 15},
@@ -343,14 +485,21 @@
                 {x: 0, z: -15}
             ];
             
+            const slothColors = [
+                0x8B4513, // Brown
+                0x6B8E23, // Olive
+                0x4B3621  // Dark brown
+            ];
+            
             for (let i = 0; i < 3; i++) {
                 const slothSize = 0.5; // Initial size
-                const slothGeometry = new THREE.BoxGeometry(slothSize, slothSize * 1.5, slothSize);
+                // Make sloths taller and lankier
+                const slothGeometry = new THREE.BoxGeometry(slothSize * 0.8, slothSize * 2.5, slothSize * 0.7);
                 
                 // Create sloth body
-                const slothMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+                const slothMaterial = new THREE.MeshStandardMaterial({ color: slothColors[i] });
                 const sloth = new THREE.Mesh(slothGeometry, slothMaterial);
-                sloth.position.set(slothPositions[i].x, slothSize * 1.5 / 2, slothPositions[i].z);
+                sloth.position.set(slothPositions[i].x, slothSize * 2.5 / 2, slothPositions[i].z);
                 sloth.castShadow = true;
                 sloth.receiveShadow = true;
                 
@@ -358,43 +507,107 @@
                 sloth.size = slothSize;
                 sloth.growthRate = 0.005; // Growth rate per second
                 sloth.baseSpeed = 0.5; // Base speed
-                sloth.speedGrowthFactor = 0.1; // Speed grows much slower than size
+                sloth.speedGrowthFactor = 0.08; // Speed grows much slower than size
                 
                 scene.add(sloth);
                 sloths.push(sloth);
                 
-                // Add eyes to sloth
-                const eyeGeometry = new THREE.SphereGeometry(slothSize * 0.15, 16, 16);
-                const eyeMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 });
+                // Add head slightly above body
+                const headGeometry = new THREE.SphereGeometry(slothSize * 0.7, 16, 16);
+                const headMaterial = new THREE.MeshStandardMaterial({ color: slothColors[i] });
+                const head = new THREE.Mesh(headGeometry, headMaterial);
+                head.position.set(0, slothSize * 1.4, 0);
+                sloth.add(head);
+                
+                // Add weird eyes to sloth - bigger, more spaced out and asymmetric
+                const eyeGeometry = new THREE.SphereGeometry(slothSize * 0.2, 16, 16);
+                const eyeMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFFFF });
                 
                 const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-                leftEye.position.set(slothSize / 2, slothSize * 0.3, -slothSize / 2);
+                leftEye.position.set(slothSize * 0.4, slothSize * 1.4, -slothSize * 0.5);
                 sloth.add(leftEye);
                 
-                const rightEye = leftEye.clone();
-                rightEye.position.set(-slothSize / 2, slothSize * 0.3, -slothSize / 2);
+                const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+                rightEye.scale.set(0.8, 1.2, 1);
+                rightEye.position.set(-slothSize * 0.5, slothSize * 1.5, -slothSize * 0.4);
                 sloth.add(rightEye);
                 
-                // Add nose to sloth
-                const noseGeometry = new THREE.SphereGeometry(slothSize * 0.1, 16, 16);
+                // Add pupils
+                const pupilGeometry = new THREE.SphereGeometry(slothSize * 0.1, 16, 16);
+                const pupilMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 });
+                
+                const leftPupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
+                leftPupil.position.set(0, 0, slothSize * 0.15);
+                leftEye.add(leftPupil);
+                
+                const rightPupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
+                rightPupil.position.set(0, 0, slothSize * 0.15);
+                rightEye.add(rightPupil);
+                
+                // Add weird nose to sloth
+                const noseGeometry = new THREE.ConeGeometry(slothSize * 0.2, slothSize * 0.4, 5);
                 const noseMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 });
                 const nose = new THREE.Mesh(noseGeometry, noseMaterial);
-                nose.position.set(0, 0, -slothSize / 2 - slothSize * 0.05);
+                nose.rotation.x = Math.PI / 2;
+                nose.position.set(0, slothSize * 1.3, -slothSize * 0.7);
                 sloth.add(nose);
                 
-                // Add arms to sloth
-                const armGeometry = new THREE.CylinderGeometry(slothSize * 0.15, slothSize * 0.15, slothSize * 1.2, 8);
-                const armMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+                // Add super long lankier arms to sloth
+                const armGeometry = new THREE.CylinderGeometry(slothSize * 0.12, slothSize * 0.08, slothSize * 2.2, 8);
+                const armMaterial = new THREE.MeshStandardMaterial({ color: slothColors[i] });
                 
                 const leftArm = new THREE.Mesh(armGeometry, armMaterial);
                 leftArm.rotation.z = Math.PI / 3;
-                leftArm.position.set(slothSize / 2 + slothSize * 0.3, -slothSize * 0.2, 0);
+                leftArm.position.set(slothSize * 0.6, slothSize * 0.6, 0);
                 sloth.add(leftArm);
                 
-                const rightArm = leftArm.clone();
+                const rightArm = new THREE.Mesh(armGeometry, armMaterial);
                 rightArm.rotation.z = -Math.PI / 3;
-                rightArm.position.set(-slothSize / 2 - slothSize * 0.3, -slothSize * 0.2, 0);
+                rightArm.position.set(-slothSize * 0.6, slothSize * 0.6, 0);
                 sloth.add(rightArm);
+                
+                // Add claws to arms
+                const clawGeometry = new THREE.ConeGeometry(slothSize * 0.1, slothSize * 0.4, 3);
+                const clawMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFFFF });
+                
+                // Left arm claws
+                const leftClaw1 = new THREE.Mesh(clawGeometry, clawMaterial);
+                leftClaw1.rotation.x = -Math.PI / 2;
+                leftClaw1.position.set(0, -slothSize * 1.0, 0);
+                leftArm.add(leftClaw1);
+                
+                const leftClaw2 = leftClaw1.clone();
+                leftClaw2.position.set(slothSize * 0.15, -slothSize * 1.0, 0);
+                leftArm.add(leftClaw2);
+                
+                const leftClaw3 = leftClaw1.clone();
+                leftClaw3.position.set(-slothSize * 0.15, -slothSize * 1.0, 0);
+                leftArm.add(leftClaw3);
+                
+                // Right arm claws
+                const rightClaw1 = leftClaw1.clone();
+                rightClaw1.position.set(0, -slothSize * 1.0, 0);
+                rightArm.add(rightClaw1);
+                
+                const rightClaw2 = leftClaw1.clone();
+                rightClaw2.position.set(slothSize * 0.15, -slothSize * 1.0, 0);
+                rightArm.add(rightClaw2);
+                
+                const rightClaw3 = leftClaw1.clone();
+                rightClaw3.position.set(-slothSize * 0.15, -slothSize * 1.0, 0);
+                rightArm.add(rightClaw3);
+                
+                // Add legs
+                const legGeometry = new THREE.CylinderGeometry(slothSize * 0.15, slothSize * 0.1, slothSize * 1.2, 8);
+                const legMaterial = new THREE.MeshStandardMaterial({ color: slothColors[i] });
+                
+                const leftLeg = new THREE.Mesh(legGeometry, legMaterial);
+                leftLeg.position.set(slothSize * 0.3, -slothSize * 1.2, 0);
+                sloth.add(leftLeg);
+                
+                const rightLeg = new THREE.Mesh(legGeometry, legMaterial);
+                rightLeg.position.set(-slothSize * 0.3, -slothSize * 1.2, 0);
+                sloth.add(rightLeg);
             }
         }
         
@@ -585,7 +798,7 @@
                 );
                 
                 // Update sloth position (height adjustment for growing)
-                sloth.position.y = sloth.size * 1.5 / 2;
+                sloth.position.y = sloth.size * 2.5 / 2;
                 
                 // Calculate direction to player
                 const directionToPlayer = new THREE.Vector3();
