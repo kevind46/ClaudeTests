@@ -77,7 +77,7 @@
         A: Move left<br>
         S: Move backward<br>
         D: Move right<br>
-        Mouse: Look around<br>
+        Mouse: Look left/right<br>
         Escape the growing sloths!
     </div>
     <div id="gameOverScreen">
@@ -87,7 +87,7 @@
     </div>
     <div id="instructions">
         Click to play<br>
-        Use W,A,S,D to move and mouse to look around
+        Use W,A,S,D to move and mouse to look left/right
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -714,14 +714,10 @@
             if (!isPointerLocked || gameOver) return;
             
             const movementX = event.movementX || event.mozMovementX || event.webkitMovementX || 0;
-            const movementY = event.movementY || event.mozMovementY || event.webkitMovementY || 0;
             
-            // Update camera rotation
+            // Only allow horizontal rotation (no looking up/down)
             camera.rotation.y -= movementX * 0.002;
-            camera.rotation.x -= movementY * 0.002;
-            
-            // Limit vertical rotation
-            camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+            camera.rotation.x = 0; // Lock camera to be parallel to floor
         }
         
         function updatePlayerPosition(delta) {
@@ -731,57 +727,43 @@
             
             // Calculate movement direction
             direction.z = Number(moveForward) - Number(moveBackward);
-            direction.x = Number(moveRight) - Number(moveLeft);
+            direction.x = Number(moveLeft) - Number(moveRight); // Ensure left is negative X, right is positive X
             direction.normalize();
             
-            // Apply camera rotation to movement direction
-            const rotatedDirection = new THREE.Vector3();
-            const cameraDirection = new THREE.Vector3();
-            camera.getWorldDirection(cameraDirection);
+            // Calculate the rotation based on camera yaw (y-rotation)
+            const rotationMatrix = new THREE.Matrix4();
+            rotationMatrix.makeRotationY(camera.rotation.y);
             
-            // Create a rotation matrix from camera direction
-            const cameraEuler = new THREE.Euler(0, Math.atan2(-cameraDirection.x, -cameraDirection.z), 0);
-            const cameraRotationMatrix = new THREE.Matrix4().makeRotationFromEuler(cameraEuler);
+            // Apply rotation to direction vector
+            direction.applyMatrix4(rotationMatrix);
             
-            // Apply rotation to movement direction
-            rotatedDirection.copy(direction).applyMatrix4(cameraRotationMatrix);
-            
-            // Update velocity
-            if (moveForward || moveBackward) playerVelocity.z = -rotatedDirection.z * speed * delta;
-            else playerVelocity.z = 0;
-            
-            if (moveLeft || moveRight) playerVelocity.x = -rotatedDirection.x * speed * delta;
-            else playerVelocity.x = 0;
-            
-            // Store old position for collision detection
-            const oldPosition = player.position.clone();
-            
-            // Update player position
-            player.position.x += playerVelocity.x;
-            player.position.z += playerVelocity.z;
+            // Move player
+            player.position.x -= direction.x * speed * delta;
+            player.position.z -= direction.z * speed * delta;
             
             // Keep player within bounds
             const boundaryLimit = 19.5;
             player.position.x = Math.max(-boundaryLimit, Math.min(boundaryLimit, player.position.x));
             player.position.z = Math.max(-boundaryLimit, Math.min(boundaryLimit, player.position.z));
             
-            // Collision detection with objects
+            // Collision detection with objects - keep track of original position
+            const originalPosition = player.position.clone();
             let collision = false;
             
             for (const object of objects) {
                 if (object instanceof THREE.Mesh && object !== floor) {
-                    // Simple box collision detection
+                    // Simple box collision detection with very tight hitboxes
                     if (object.geometry.type === 'BoxGeometry') {
-                        // Get object dimensions with a small buffer to make hitboxes tighter
+                        // Get object dimensions with an even smaller buffer
                         const box = new THREE.Box3().setFromObject(object);
-                        const buffer = 0.1; // Tighter buffer
+                        const buffer = 0.2; // Increase buffer to make hitboxes tighter
                         const objectBox = new THREE.Box3(
                             new THREE.Vector3(box.min.x + buffer, box.min.y, box.min.z + buffer),
                             new THREE.Vector3(box.max.x - buffer, box.max.y, box.max.z - buffer)
                         );
                         
-                        // Use a smaller collision radius
-                        const playerRadius = player.collisionRadius * 0.7;
+                        // Use a very small collision radius for player
+                        const playerRadius = 0.15;
                         
                         // Check for collision
                         if (player.position.x + playerRadius > objectBox.min.x && 
@@ -789,16 +771,18 @@
                             player.position.z + playerRadius > objectBox.min.z &&
                             player.position.z - playerRadius < objectBox.max.z) {
                             
-                            // Calculate overlap on each axis to find the smallest push needed
+                            collision = true;
+                            
+                            // Calculate overlap on each axis
                             const overlapX1 = player.position.x + playerRadius - objectBox.min.x;
                             const overlapX2 = objectBox.max.x - (player.position.x - playerRadius);
                             const overlapZ1 = player.position.z + playerRadius - objectBox.min.z;
                             const overlapZ2 = objectBox.max.z - (player.position.z - playerRadius);
                             
-                            // Find the axis with the smallest overlap
+                            // Find the smallest overlap
                             const minOverlap = Math.min(overlapX1, overlapX2, overlapZ1, overlapZ2);
                             
-                            // Apply the minimum push needed to resolve collision
+                            // Resolve collision with the minimal push
                             if (minOverlap === overlapX1) {
                                 player.position.x = objectBox.min.x - playerRadius - 0.01;
                             } else if (minOverlap === overlapX2) {
@@ -808,27 +792,20 @@
                             } else if (minOverlap === overlapZ2) {
                                 player.position.z = objectBox.max.z + playerRadius + 0.01;
                             }
-                            
-                            // Skip checking other objects after resolving this collision
-                            continue;
                         }
                     }
-                    // Cylinder collision detection for trash cans with tighter radius
+                    // Cylinder collision detection for trash cans with very tight radius
                     else if (object.geometry.type === 'CylinderGeometry') {
                         const dx = player.position.x - object.position.x;
                         const dz = player.position.z - object.position.z;
                         const distance = Math.sqrt(dx * dx + dz * dz);
-                        // Use a smaller collision radius for both player and trash can
-                        const minDistance = player.collisionRadius * 0.7 + 0.5; // Reduced from 0.6
+                        const minDistance = 0.4; // Reduced collision distance
                         
                         if (distance < minDistance) {
                             // Push player away from trash can
                             const angle = Math.atan2(dz, dx);
                             player.position.x = object.position.x + Math.cos(angle) * (minDistance + 0.01);
                             player.position.z = object.position.z + Math.sin(angle) * (minDistance + 0.01);
-                            
-                            // Skip checking other objects after resolving this collision
-                            continue;
                         }
                     }
                 }
